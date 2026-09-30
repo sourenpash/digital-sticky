@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
-import type { Board, Lane, LaneKind, Note, Settings } from '../../../shared/types.ts';
+import { pruneCompletions, repeatStatus } from '../../../shared/recurring.ts';
+import type { Board, Goal, Lane, LaneKind, Note, Settings } from '../../../shared/types.ts';
 import { makeSampleBoard } from '../data/sample.ts';
 import { currentTime } from '../lib/now.ts';
 import { uid } from '../lib/uid.ts';
@@ -76,6 +77,42 @@ export const board = {
     });
   },
 
+  /** Recurring tasks: log one "Did it" now. */
+  logRoutine(id: string): void {
+    const note = state.notes.find(n => n.id === id);
+    if (!note?.repeat) return;
+    updateNote(id, { completions: pruneCompletions([...(note.completions ?? []), stamp()], currentTime()) });
+  },
+
+  /** Recurring tasks: take back the latest "Did it" from the current day, week or month. */
+  undoRoutine(id: string): void {
+    const note = state.notes.find(n => n.id === id);
+    const status = note ? repeatStatus(note, currentTime()) : null;
+    if (!note || !status || status.done === 0) return;
+    const completions = [...(note.completions ?? [])].sort();
+    completions.pop();
+    updateNote(id, { completions });
+  },
+
+  addGoal(goal: Goal): void {
+    commit({ ...state, goals: [...state.goals, { ...goal, createdAt: stamp() }] });
+  },
+
+  updateGoal(id: string, patch: Partial<Goal>): void {
+    commit({ ...state, goals: state.goals.map(goal => (goal.id === id ? { ...goal, ...patch } : goal)) });
+  },
+
+  /** Removes a goal and returns it so the caller can offer Undo. */
+  deleteGoal(id: string): Goal | undefined {
+    const goal = state.goals.find(g => g.id === id);
+    if (goal) commit({ ...state, goals: state.goals.filter(g => g.id !== id) });
+    return goal;
+  },
+
+  restoreGoal(goal: Goal): void {
+    if (!state.goals.some(g => g.id === goal.id)) commit({ ...state, goals: [...state.goals, goal] });
+  },
+
   updateSettings(change: (settings: Settings) => Settings): void {
     commit({ ...state, settings: change(state.settings) });
   },
@@ -109,7 +146,8 @@ const APPLICATION_CHECKLIST = ['Confirm eligibility', 'Budget', 'Narrative / sta
 
 /** A blank note for the "Add" templates; it joins the board only when the user taps Add. */
 export function draftNote(kind: LaneKind, lanes: Lane[]): Note {
-  const lane = lanes.find(l => l.kind === kind) ?? lanes[0];
+  const lane =
+    lanes.find(l => l.kind === kind) ?? (kind === 'routine' ? lanes.find(l => l.kind === 'task') : undefined) ?? lanes[0];
   const now = stamp();
   const blank: Note = {
     id: uid(),
@@ -130,5 +168,11 @@ export function draftNote(kind: LaneKind, lanes: Lane[]): Note {
       checklist: APPLICATION_CHECKLIST.map(text => ({ id: uid(), text, done: false })),
     };
   }
+  if (kind === 'routine') return { ...blank, repeat: { every: 'week', times: 1 }, completions: [] };
   return blank;
+}
+
+/** A blank goal for the goal form; it joins the board only when the user taps Add. */
+export function draftGoal(): Goal {
+  return { id: uid(), title: '', measure: 'submitted', target: 5, count: 0, createdAt: stamp() };
 }

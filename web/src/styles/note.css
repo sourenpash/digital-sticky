@@ -12,6 +12,7 @@
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0) 13%), var(--paper, var(--paper-yellow));
   color: var(--paper-ink);
   font: inherit;
+  line-height: 1.25;
   text-align: left;
   transform: rotate(var(--tilt, 0deg));
   box-shadow:
@@ -64,8 +65,10 @@ button.note:active {
   flex: none;
 }
 
+/* --lines comes from StickyNote: as many whole lines as fit above the badges. */
 .note-title {
   display: -webkit-box;
+  flex: none;
   margin-top: calc(var(--s) * 0.025);
   overflow: hidden;
   font-family: var(--font-title);
@@ -73,9 +76,12 @@ button.note:active {
   font-weight: 650;
   line-height: 1.12;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  overflow-wrap: anywhere;
+  -webkit-line-clamp: var(--lines, 3);
+  line-clamp: var(--lines, 3);
+  overflow-wrap: break-word;
+  -webkit-hyphens: auto;
+  hyphens: auto;
+  hyphenate-limit-chars: 10 4 4;
 }
 
 .note.title-short .note-title {
@@ -84,14 +90,10 @@ button.note:active {
 
 .note.title-long .note-title {
   font-size: calc(var(--s) * 0.1);
-  -webkit-line-clamp: 4;
-  line-clamp: 4;
 }
 
 .note.title-xlong .note-title {
   font-size: calc(var(--s) * 0.088);
-  -webkit-line-clamp: 5;
-  line-clamp: 5;
 }
 
 .note-meta {
@@ -115,10 +117,70 @@ button.note:active {
 
 .note-flags {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
+  align-self: stretch;
   gap: calc(var(--s) * 0.06);
+  min-width: 0;
   font-size: calc(var(--s) * 0.066);
   font-weight: 800;
+}
+
+/* Progress bar: checklist steps, or this week's count for a recurring task. */
+.note-progress {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  gap: calc(var(--s) * 0.035);
+  min-width: calc(var(--s) * 0.3);
+  max-width: calc(var(--s) * 0.62);
+}
+
+.note-bar {
+  position: relative;
+  flex: 1;
+  height: calc(var(--s) * 0.046);
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(42, 39, 35, 0.14);
+}
+
+.note-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: rgba(42, 39, 35, 0.78);
+}
+
+.note-bar-label {
+  flex: none;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
+/* This week's days for a daily task: filled = done, ring = today. */
+.note-dots {
+  display: flex;
+  gap: calc(var(--s) * 0.028);
+}
+
+.note-dots i {
+  width: calc(var(--s) * 0.052);
+  height: calc(var(--s) * 0.052);
+  border-radius: 50%;
+  background: rgba(42, 39, 35, 0.16);
+}
+
+.note-dots i.is-done {
+  background: rgba(42, 39, 35, 0.78);
+}
+
+.note-dots i.is-today:not(.is-done) {
+  background: transparent;
+  box-shadow: inset 0 0 0 calc(var(--s) * 0.01) rgba(42, 39, 35, 0.78);
+}
+
+.note-dots i.is-future {
+  background: rgba(42, 39, 35, 0.07);
 }
 
 .flag {
@@ -134,6 +196,7 @@ button.note:active {
 }
 
 .flag-warn {
+  flex: none;
   color: #8f3c00;
   opacity: 1;
 }
@@ -168,6 +231,8 @@ button.note:active {
 .chip-remind { background: rgba(42, 39, 35, 0.86); color: #fff; }
 .chip-good { background: #1f7a4d; color: #fff; }
 .chip-muted { background: rgba(42, 39, 35, 0.1); color: rgba(42, 39, 35, 0.72); }
+.chip-repeat { background: rgba(42, 39, 35, 0.1); color: var(--paper-ink); }
+.chip-repeat-now { background: rgba(42, 39, 35, 0.86); color: #fff; }
 
 .note.is-done {
   filter: saturate(0.35) brightness(0.8);
@@ -176,6 +241,82 @@ button.note:active {
 .note.is-done .note-title {
   text-decoration: line-through;
   text-decoration-thickness: 0.08em;
+}
+
+/* A recurring task that's done for this day, week or month. */
+.note.is-rested {
+  filter: saturate(0.45) brightness(0.84);
+}
+
+/* Small squares: drop the small print, keep the title and badge readable. */
+.note.is-compact {
+  padding: calc(var(--s) * 0.08);
+}
+
+.note-flags.has-bar .flag-text,
+.note.is-compact .note-stage,
+.note.is-compact .note-meta,
+.note.is-compact .flag-text {
+  display: none;
+}
+
+.note.is-compact .note-top {
+  position: absolute;
+  top: calc(var(--s) * 0.06);
+  right: calc(var(--s) * 0.06);
+  min-height: 0;
+}
+
+.note.is-compact .note-pin {
+  width: calc(var(--s) * 0.11);
+  height: calc(var(--s) * 0.11);
+}
+
+.note.is-compact .note-title {
+  margin-top: 0;
+  font-size: calc(var(--s) * 0.122);
+}
+
+.note.is-compact.is-pinned .note-title {
+  padding-right: calc(var(--s) * 0.1);
+}
+
+.note.is-compact.title-short .note-title {
+  font-size: calc(var(--s) * 0.15);
+}
+
+.note.is-compact.title-long .note-title {
+  font-size: calc(var(--s) * 0.11);
+}
+
+.note.is-compact.title-xlong .note-title {
+  font-size: calc(var(--s) * 0.1);
+}
+
+.note.is-compact .note-flags {
+  font-size: calc(var(--s) * 0.086);
+}
+
+.note.is-compact .note-progress {
+  max-width: none;
+}
+
+.note.is-compact .note-bar {
+  height: calc(var(--s) * 0.05);
+}
+
+.note.is-compact .chip {
+  font-size: calc(var(--s) * 0.094);
+}
+
+.note.is-compact .note-dots i {
+  width: calc(var(--s) * 0.07);
+  height: calc(var(--s) * 0.07);
+}
+
+.note.is-compact .note-stamp {
+  width: calc(var(--s) * 0.36);
+  height: calc(var(--s) * 0.36);
 }
 
 .note-stamp {

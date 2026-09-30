@@ -62,7 +62,7 @@ export function Wall({ board, now, connectUrl }: { board: Board; now: Date; conn
             <NightClock notes={board.notes} now={now} />
           ) : (
             <>
-              <WallHeader notes={board.notes} now={now} />
+              <WallHeader goals={board.goals} notes={board.notes} now={now} />
               <div className="wall-main">
                 <WallColumns lanes={board.lanes} notes={board.notes} now={now} u={box.u} />
                 <aside className="wall-side">

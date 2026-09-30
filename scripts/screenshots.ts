@@ -33,6 +33,18 @@ const openAdd = async (page: Page) => {
   await page.getByRole('button', { name: /Add a note|New note/ }).first().click();
   await page.waitForTimeout(300);
 };
+const openGoal = async (page: Page) => {
+  await page.getByRole('button', { name: /Submit 5 applications/ }).first().click();
+  await page.waitForTimeout(400);
+};
+const openRoutine = async (page: Page) => {
+  await page.getByRole('button', { name: /Write for an hour/ }).first().click();
+  await page.waitForTimeout(400);
+};
+const showLane = (name: string) => async (page: Page) => {
+  await page.getByRole('region', { name }).scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+};
 
 const shots: Shot[] = [
   { keep: true, name: 'wall-day', query: 'preset=day', hash: 'wall', viewport: hd },
@@ -44,6 +56,22 @@ const shots: Shot[] = [
   { name: 'phone-board-dark', query: 'preset=day', hash: 'board', viewport: phone, scale: 2, mobile: true, colorScheme: 'dark' },
   { keep: true, name: 'phone-note', query: 'preset=day', hash: 'board', viewport: phone, scale: 2, mobile: true, act: openNsf },
   { name: 'phone-add-menu', query: 'preset=day', hash: 'board', viewport: phone, scale: 2, mobile: true, act: openAdd },
+  { keep: true, name: 'phone-goal', query: 'preset=day', hash: 'board', viewport: phone, scale: 2, mobile: true, act: openGoal },
+  { keep: true, name: 'phone-recurring', query: 'preset=day', hash: 'board', viewport: phone, scale: 2, mobile: true, act: openRoutine },
+  { name: 'phone-recurring-lane', query: 'preset=day', hash: 'board', viewport: phone, scale: 2, mobile: true, act: showLane('Recurring') },
+  {
+    name: 'phone-new-goal',
+    query: 'preset=day',
+    hash: 'board',
+    viewport: phone,
+    scale: 2,
+    mobile: true,
+    act: async page => {
+      await openAdd(page);
+      await page.getByRole('button', { name: /^Goal/ }).click();
+      await page.waitForTimeout(400);
+    },
+  },
   {
     name: 'phone-new-application',
     query: 'preset=day',
@@ -62,6 +90,8 @@ const shots: Shot[] = [
   { name: 'phone-wall-settings', query: 'preset=day', hash: 'display', viewport: phone, scale: 2, mobile: true },
   { name: 'phone-pin', query: 'preset=day', hash: 'login', viewport: phone, scale: 2, mobile: true },
   { keep: true, name: 'desktop-board', query: 'preset=day', hash: 'board', viewport: desktop, act: openNsf },
+  { name: 'desktop-goal', query: 'preset=day', hash: 'board', viewport: desktop, act: openGoal },
+  { name: 'desktop-board-closed', query: 'preset=day', hash: 'board', viewport: desktop },
   { name: 'desktop-calendar', query: 'preset=day', hash: 'calendar', viewport: desktop },
   { name: 'desktop-wall-settings', query: 'preset=day,qr', hash: 'display', viewport: desktop },
 ];

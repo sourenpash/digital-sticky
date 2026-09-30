@@ -10,15 +10,17 @@ export type Route =
   | { view: 'wall' }
   | { view: 'demo' }
   | { view: 'login' }
-  | { view: 'editor'; tab: EditorTab; noteId?: string; newKind?: LaneKind };
+  | { view: 'editor'; tab: EditorTab; noteId?: string; newKind?: LaneKind; goalId?: string; newGoal?: boolean };
 
 const TABS: EditorTab[] = ['board', 'calendar', 'check', 'display'];
-const KINDS: LaneKind[] = ['application', 'source', 'task', 'reminder', 'note'];
+const KINDS: LaneKind[] = ['application', 'source', 'task', 'routine', 'reminder', 'note'];
 
 export function parseRoute(token: string): Route | null {
   if (token === 'wall' || token === 'demo' || token === 'login') return { view: token };
   if ((TABS as string[]).includes(token)) return { view: 'editor', tab: token as EditorTab };
   if (token.startsWith('note-')) return { view: 'editor', tab: 'board', noteId: token.slice(5) };
+  if (token === 'new-goal') return { view: 'editor', tab: 'board', newGoal: true };
+  if (token.startsWith('goal-')) return { view: 'editor', tab: 'board', goalId: token.slice(5) };
   if (token.startsWith('new-')) {
     const kind = token.slice(4) as LaneKind;
     if (KINDS.includes(kind)) return { view: 'editor', tab: 'board', newKind: kind };

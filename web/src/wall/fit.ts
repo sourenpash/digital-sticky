@@ -16,15 +16,20 @@ export interface BoardLayout {
 /**
  * Lay out the wall's columns inside a W×H area (px). Every square gets the same size;
  * a column with many notes gets extra sub-columns instead of smaller squares. The size
- * is the largest (up to 16u) that lets all columns sit side by side. If nothing fits
- * even at 8u, the fullest columns show a "+N more" tile.
+ * is the largest (up to 11u) that lets all columns sit side by side, so the whole board
+ * shows at once. If nothing fits even at 6.5u, the fullest columns show a "+N more" tile.
  */
+export const MAX_SQUARE_U = 11;
+export const MIN_SQUARE_U = 6.5;
+/** Below this size squares switch to the compact look (no stage or funder line). */
+export const COMPACT_BELOW_U = 9;
+
 export function layoutBoard(W: number, H: number, counts: number[], u: number): BoardLayout {
   const gap = 0.9 * u;
   const colGap = 1.5 * u;
-  const minColW = 13 * u;
-  const maxS = 16 * u;
-  const minS = 8 * u;
+  const minColW = 13.5 * u;
+  const maxS = MAX_SQUARE_U * u;
+  const minS = MIN_SQUARE_U * u;
 
   const measure = (size: number) => {
     const rows = Math.max(1, Math.floor((H + gap) / (size + gap)));

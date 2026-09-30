@@ -20,7 +20,7 @@ export function DemoSplit({ board, now }: { board: Board; now: Date }) {
           <h1>Digital Sticky</h1>
           <span className="demo-tag">Prototype</span>
         </div>
-        <p>Tap around on the phone: add a note, tick a checklist item, mark a source verified. The wall updates instantly. This is sample data and nothing is saved.</p>
+        <p>Tap around on the phone: add a note, tick a checklist item, mark a recurring task done, bump a goal. The wall updates instantly. This is sample data and nothing is saved.</p>
       </header>
       <div className="demo-stage">
         <div className="phone-frame">

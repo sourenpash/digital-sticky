@@ -1,5 +1,6 @@
 import { isSameDay, parseISO } from 'date-fns';
 import { parseWhen, type When } from './dates.ts';
+import { isRested } from './recurring.ts';
 import { FINISHED_STAGES, type Lane, type Note, type NoteColor } from './types.ts';
 
 export interface NoteWhen {
@@ -34,15 +35,18 @@ export function noteColor(note: Note, lane: Lane | undefined): NoteColor {
   return note.color ?? lane?.color ?? 'yellow';
 }
 
-function rank(note: Note): number {
-  if (note.done) return 3;
+function rank(note: Note, now: Date): number {
+  if (note.done || isRested(note, now)) return 3;
   if (isFinishedStage(note)) return 2;
   return note.pinned ? 0 : 1;
 }
 
-/** Pinned first, then soonest date (overdue first), then newest; finished and done last. */
-export function compareNotes(a: Note, b: Note): number {
-  const byRank = rank(a) - rank(b);
+/**
+ * Pinned first, then soonest date (overdue first), then newest. Finished applications,
+ * done notes and recurring tasks that are done for now go last.
+ */
+export function compareNotes(a: Note, b: Note, now: Date): number {
+  const byRank = rank(a, now) - rank(b, now);
   if (byRank !== 0) return byRank;
   const wa = noteWhen(a);
   const wb = noteWhen(b);

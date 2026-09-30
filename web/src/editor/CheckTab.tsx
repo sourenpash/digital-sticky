@@ -47,8 +47,8 @@ function CheckCard({ note, data, now, onOpen }: { note: Note; data: Board; now: 
 
 export function CheckTab({ board, now, onOpen }: { board: Board; now: Date; onOpen: (id: string) => void }) {
   const open = board.notes.filter(n => !n.done);
-  const pending = open.filter(n => unverifiedCount(n) > 0).sort(compareNotes);
-  const verified = open.filter(n => n.links.length > 0 && unverifiedCount(n) === 0).sort(compareNotes);
+  const pending = open.filter(n => unverifiedCount(n) > 0).sort((a, b) => compareNotes(a, b, now));
+  const verified = open.filter(n => n.links.length > 0 && unverifiedCount(n) === 0).sort((a, b) => compareNotes(a, b, now));
   const sourceLanes = new Set(board.lanes.filter(l => l.kind === 'source').map(l => l.id));
   const noLink = open.filter(n => n.links.length === 0 && sourceLanes.has(n.laneId));
   const total = pending.reduce((sum, n) => sum + unverifiedCount(n), 0);

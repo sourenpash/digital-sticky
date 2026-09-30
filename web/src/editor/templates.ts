@@ -1,4 +1,4 @@
-import { Bell, Landmark, ListTodo, SearchCheck, StickyNote as StickyNoteIcon, type LucideIcon } from 'lucide-react';
+import { Bell, Landmark, ListTodo, Repeat, SearchCheck, StickyNote as StickyNoteIcon, type LucideIcon } from 'lucide-react';
 import type { LaneKind, NoteColor } from '../../../shared/types.ts';
 
 export interface Template {
@@ -39,6 +39,15 @@ export const TEMPLATES: Template[] = [
     titlePlaceholder: 'What needs doing?',
     icon: ListTodo,
     color: 'green',
+  },
+  {
+    kind: 'routine',
+    short: 'recurring task',
+    title: 'Recurring task',
+    hint: 'No deadline. Comes back every day, week or month',
+    titlePlaceholder: 'What do you do regularly?',
+    icon: Repeat,
+    color: 'orange',
   },
   {
     kind: 'reminder',

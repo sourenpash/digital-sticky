@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { addDays, format, set } from 'date-fns';
+import { addDays, format, isSameDay, parseISO, set } from 'date-fns';
 import {
   AlignLeft,
   Bell,
@@ -10,13 +10,17 @@ import {
   Landmark,
   Link2,
   ListChecks,
+  Minus,
   Pin,
   Plus,
+  Repeat as RepeatIcon,
   Trash2,
+  Undo2,
   X,
 } from 'lucide-react';
 import { lanesInOrder } from '../../../shared/board.ts';
 import { composeWhen, parseWhen, splitWhen } from '../../../shared/dates.ts';
+import { describeRepeat, pruneCompletions, repeatStatus, weekDots } from '../../../shared/recurring.ts';
 import {
   NOTE_COLORS,
   STAGES,
@@ -25,26 +29,39 @@ import {
   type LaneKind,
   type Note,
   type NoteColor,
+  type Repeat,
+  type RepeatEvery,
   type SourceLink,
 } from '../../../shared/types.ts';
 import { currentTime } from '../lib/now.ts';
 import { uid } from '../lib/uid.ts';
 import { templateFor } from './templates.ts';
 
-type Section = 'application' | 'due' | 'remind' | 'checklist' | 'links' | 'body';
+type Section = 'application' | 'due' | 'repeat' | 'remind' | 'checklist' | 'links' | 'body';
 
-/** Which fields each kind of column shows first. The rest sit behind "More fields". */
+/** Which fields each kind of column shows first. The rest sit behind "Add …". */
 const PRIMARY: Record<LaneKind, Section[]> = {
   application: ['application', 'due', 'checklist', 'links', 'body'],
   source: ['links', 'due', 'body'],
   task: ['due', 'checklist', 'body'],
+  routine: ['repeat', 'body'],
   reminder: ['remind', 'body'],
   note: ['body'],
 };
-const ALL: Section[] = ['application', 'due', 'remind', 'checklist', 'links', 'body'];
+const ALL: Section[] = ['application', 'due', 'repeat', 'remind', 'checklist', 'links', 'body'];
+/** Recurring tasks have no deadline, and only recurring tasks repeat. */
+const NOT_OFFERED: Record<LaneKind, Section[]> = {
+  application: ['repeat'],
+  source: ['repeat'],
+  task: ['repeat'],
+  routine: ['application', 'due', 'remind'],
+  reminder: ['repeat'],
+  note: ['repeat'],
+};
 const SECTION_LABEL: Record<Section, string> = {
   application: 'funder & stage',
   due: 'deadline',
+  repeat: 'repeat',
   remind: 'reminder',
   checklist: 'checklist',
   links: 'sources',
@@ -57,6 +74,8 @@ function hasContent(note: Note, section: Section): boolean {
       return Boolean(note.stage || note.funder || note.amount);
     case 'due':
       return Boolean(note.due);
+    case 'repeat':
+      return Boolean(note.repeat);
     case 'remind':
       return Boolean(note.remindAt);
     case 'checklist':
@@ -72,24 +91,30 @@ interface Props {
   note: Note;
   lanes: Lane[];
   mode: 'edit' | 'new';
+  now: Date;
   onChange: (patch: Partial<Note>) => void;
   onClose: () => void;
   onAdd?: () => void;
   onDelete?: () => void;
   onToggleDone?: () => void;
+  /** Recurring tasks: log a "Did it", or take the last one back. */
+  onLog?: () => void;
+  onUndoLog?: () => void;
 }
 
-export function NoteEditor({ note, lanes, mode, onChange, onClose, onAdd, onDelete, onToggleDone }: Props) {
+export function NoteEditor({ note, lanes, mode, now, onChange, onClose, onAdd, onDelete, onToggleDone, onLog, onUndoLog }: Props) {
   const lane = lanes.find(l => l.id === note.laneId);
   const kind = lane?.kind ?? 'note';
   const template = templateFor(kind);
   const [showAll, setShowAll] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const routine = repeatStatus(note, now);
 
   const primary = PRIMARY[kind];
-  const shown = (s: Section) => primary.includes(s) || showAll || hasContent(note, s);
+  const offered = (s: Section) => !NOT_OFFERED[kind].includes(s) || hasContent(note, s);
+  const shown = (s: Section) => primary.includes(s) || hasContent(note, s) || (showAll && offered(s));
   const sections = [...primary, ...ALL.filter(s => !primary.includes(s))].filter(shown);
-  const hidden = ALL.filter(s => !shown(s));
+  const hidden = ALL.filter(s => !shown(s) && offered(s));
 
   const renderSection = (section: Section): ReactNode => {
     switch (section) {
@@ -108,6 +133,8 @@ export function NoteEditor({ note, lanes, mode, onChange, onClose, onAdd, onDele
             quick={dueQuickPicks()}
           />
         );
+      case 'repeat':
+        return <RepeatField key={section} note={note} now={now} onChange={onChange} />;
       case 'remind':
         return (
           <WhenField
@@ -218,9 +245,22 @@ export function NoteEditor({ note, lanes, mode, onChange, onClose, onAdd, onDele
           </>
         ) : (
           <>
-            <button type="button" className="btn btn-primary" onClick={onToggleDone}>
-              <Check aria-hidden="true" /> {note.done ? 'Mark not done' : 'Mark done'}
-            </button>
+            {routine ? (
+              <>
+                <button type="button" className={`btn ${routine.complete ? 'btn-done' : 'btn-primary'}`} disabled={routine.complete} onClick={onLog}>
+                  <Check aria-hidden="true" /> {routine.complete ? doneLabel(routine.every) : 'Did it'}
+                </button>
+                {routine.every === 'month' && routine.done > 0 && (
+                  <button type="button" className="btn btn-ghost" onClick={onUndoLog}>
+                    <Undo2 aria-hidden="true" /> Undo
+                  </button>
+                )}
+              </>
+            ) : (
+              <button type="button" className="btn btn-primary" onClick={onToggleDone}>
+                <Check aria-hidden="true" /> {note.done ? 'Mark not done' : 'Mark done'}
+              </button>
+            )}
             <button type="button" className="btn btn-ghost btn-danger-text" onClick={() => setConfirmDelete(true)}>
               <Trash2 aria-hidden="true" /> Delete
             </button>
@@ -250,7 +290,7 @@ function LanePicker({ lanes, value, onChange }: { lanes: Lane[]; value: string; 
   );
 }
 
-function TitleInput({
+export function TitleInput({
   id,
   value,
   placeholder,
@@ -432,6 +472,161 @@ function WhenField({
         ))}
       </div>
       <p className="ne-hint">{hint}</p>
+    </fieldset>
+  );
+}
+
+const doneLabel = (every: RepeatEvery) =>
+  every === 'day' ? 'Done for today' : every === 'week' ? 'Done for this week' : 'Done for this month';
+
+const EVERY: Array<{ value: RepeatEvery; label: string }> = [
+  { value: 'day', label: 'Every day' },
+  { value: 'week', label: 'Every week' },
+  { value: 'month', label: 'Every month' },
+];
+const WEEKDAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+function Stepper({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (value: number) => void }) {
+  return (
+    <div className="stepper">
+      <span className="stepper-label">{label}</span>
+      <button type="button" className="icon-btn" aria-label={`Fewer: ${label}`} disabled={value <= min} onClick={() => onChange(value - 1)}>
+        <Minus />
+      </button>
+      <span className="stepper-value" aria-live="polite">
+        {value}
+      </span>
+      <button type="button" className="icon-btn" aria-label={`More: ${label}`} disabled={value >= max} onClick={() => onChange(value + 1)}>
+        <Plus />
+      </button>
+    </div>
+  );
+}
+
+/** Tapping a day in the week strip marks it done, or takes that day's "Did it" back. */
+function toggleDay(completions: string[], day: Date, now: Date): string[] {
+  const onDay = completions
+    .map((iso, index) => ({ iso, index }))
+    .filter(({ iso }) => isSameDay(parseISO(iso), day))
+    .sort((a, b) => a.iso.localeCompare(b.iso));
+  const latest = onDay[onDay.length - 1];
+  if (latest) return completions.filter((_, index) => index !== latest.index);
+  const at = isSameDay(day, now) ? now : set(day, { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 });
+  return pruneCompletions([...completions, at.toISOString()], now);
+}
+
+function RepeatField({ note, now, onChange }: { note: Note; now: Date; onChange: (patch: Partial<Note>) => void }) {
+  const repeat = note.repeat;
+  const days = repeat?.every === 'week' ? (repeat.days ?? []) : [];
+  const status = repeatStatus(note, now);
+  const dots = repeat ? weekDots(note, now) : [];
+  const period = repeat?.every === 'day' ? 'Today' : repeat?.every === 'week' ? 'This week' : 'This month';
+  const setRepeat = (next: Repeat) => onChange({ repeat: next });
+
+  const pickDay = (day: number) => {
+    if (!repeat) return;
+    const next = days.includes(day) ? days.filter(d => d !== day) : [...days, day].sort((a, b) => a - b);
+    setRepeat({ ...repeat, days: next.length ? next : undefined });
+  };
+
+  const reset = repeat?.every === 'day' ? 'each morning' : repeat?.every === 'week' ? 'each Sunday' : 'on the 1st of the month';
+  const anyDays = repeat?.every === 'week' && days.length === 0 ? ', any days' : '';
+
+  return (
+    <fieldset className="ne-section">
+      <legend className="ne-label">
+        <RepeatIcon aria-hidden="true" /> Repeats
+      </legend>
+      <div className="seg-group" role="radiogroup" aria-label="How often">
+        {EVERY.map(option => (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={repeat?.every === option.value}
+            className={`seg${repeat?.every === option.value ? ' is-on' : ''}`}
+            onClick={() => setRepeat({ every: option.value, times: 1 })}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {repeat?.every === 'week' && (
+        <>
+          <span className="field-label">
+            Only on set days <span className="ne-optional">(optional)</span>
+          </span>
+          <div className="day-picks" role="group" aria-label="Only on these days">
+            {WEEKDAY_LETTERS.map((letter, day) => (
+              <button
+                key={day}
+                type="button"
+                aria-pressed={days.includes(day)}
+                aria-label={WEEKDAY_NAMES[day]}
+                className={`day-pick${days.includes(day) ? ' is-on' : ''}`}
+                onClick={() => pickDay(day)}
+              >
+                {letter}
+              </button>
+            ))}
+          </div>
+          {days.length === 0 && (
+            <Stepper label="Times a week" value={repeat.times} min={1} max={7} onChange={times => setRepeat({ ...repeat, times })} />
+          )}
+        </>
+      )}
+      {repeat?.every === 'month' && (
+        <Stepper label="Times a month" value={repeat.times} min={1} max={20} onChange={times => setRepeat({ ...repeat, times })} />
+      )}
+      {repeat && (
+        <p className="ne-hint">
+          {describeRepeat(repeat)}
+          {anyDays}. No deadline; the count starts over {reset}.
+        </p>
+      )}
+      {repeat && status && (
+        <div className="repeat-progress">
+          <div className="repeat-progress-head">
+            <span>{period}</span>
+            <strong>{status.complete ? 'Done' : `${status.done} of ${status.target}`}</strong>
+          </div>
+          {status.target > 1 && (
+            <span className="repeat-bar" aria-hidden="true">
+              <span style={{ width: `${Math.round((Math.min(status.done, status.target) / status.target) * 100)}%` }} />
+            </span>
+          )}
+          {repeat.every !== 'month' && (
+            <>
+              <ol className="week-strip" aria-label="This week">
+                {dots.map((dot, i) => (
+                  <li
+                    key={i}
+                    className={[dot.done ? 'is-done' : '', dot.isToday ? 'is-today' : '', dot.isFuture ? 'is-future' : '', dot.scheduled ? 'is-set' : '']
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
+                    <span className="week-strip-day" aria-hidden="true">
+                      {WEEKDAY_LETTERS[i]}
+                    </span>
+                    <button
+                      type="button"
+                      className="week-strip-mark"
+                      aria-pressed={dot.done}
+                      aria-label={`${WEEKDAY_NAMES[i]}${dot.isToday ? ' (today)' : ''}: ${dot.done ? 'done' : 'not done'}`}
+                      disabled={dot.isFuture}
+                      onClick={() => onChange({ completions: toggleDay(note.completions ?? [], dot.date, now) })}
+                    >
+                      {dot.done && <Check aria-hidden="true" />}
+                    </button>
+                  </li>
+                ))}
+              </ol>
+              <p className="ne-hint repeat-tip">Tap a day to mark it done, or tap again to undo.</p>
+            </>
+          )}
+        </div>
+      )}
     </fieldset>
   );
 }

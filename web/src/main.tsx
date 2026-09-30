@@ -11,6 +11,8 @@ import './styles/editor.css';
 import './styles/proto.css';
 
 applyPresetsFromUrl();
+// Word hyphenation on the notes needs a language; the preview page has no <html lang>.
+if (!document.documentElement.lang) document.documentElement.lang = 'en';
 
 const root = document.getElementById('root');
 if (root) {

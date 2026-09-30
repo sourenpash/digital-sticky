@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from '
 import { compareNotes, lanesInOrder, visibleOnWall } from '../../../shared/board.ts';
 import type { Lane, Note } from '../../../shared/types.ts';
 import { StickyNote } from '../components/StickyNote.tsx';
-import { layoutBoard } from './fit.ts';
+import { COMPACT_BELOW_U, layoutBoard } from './fit.ts';
 
 /** Watches an element's size. */
 function useSize<T extends HTMLElement>() {
@@ -24,7 +24,7 @@ export function WallColumns({ lanes, notes, now, u }: { lanes: Lane[]; notes: No
   const ordered = lanesInOrder(lanes);
   const columns = ordered.map(lane => ({
     lane,
-    notes: notes.filter(note => note.laneId === lane.id && visibleOnWall(note, now)).sort(compareNotes),
+    notes: notes.filter(note => note.laneId === lane.id && visibleOnWall(note, now)).sort((a, b) => compareNotes(a, b, now)),
   }));
 
   // Width comes from the whole row of columns; height from one column's note area
@@ -37,6 +37,7 @@ export function WallColumns({ lanes, notes, now, u }: { lanes: Lane[]; notes: No
     () => layoutBoard(row.size.w, area.size.h, counts, u),
     [row.size.w, area.size.h, countsKey, u],
   );
+  const compact = layout.size < COMPACT_BELOW_U * u;
 
   return (
     <div
@@ -64,7 +65,7 @@ export function WallColumns({ lanes, notes, now, u }: { lanes: Lane[]; notes: No
                     style={{ gridTemplateColumns: `repeat(${fit.cols}, ${layout.size}px)`, gridAutoRows: `${layout.size}px` }}
                   >
                     {laneNotes.slice(0, fit.shown).map(note => (
-                      <StickyNote key={note.id} note={note} lane={lane} now={now} size={layout.size} />
+                      <StickyNote key={note.id} note={note} lane={lane} now={now} size={layout.size} compact={compact} />
                     ))}
                     {fit.overflow > 0 && (
                       <div className="note-more" style={{ '--s': `${layout.size}px` } as CSSProperties}>

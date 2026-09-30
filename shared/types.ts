@@ -4,7 +4,7 @@ export const NOTE_COLORS = ['yellow', 'pink', 'blue', 'green', 'orange', 'purple
 export type NoteColor = (typeof NOTE_COLORS)[number];
 
 /** What a column is for; decides which template a new note in it starts from. */
-export type LaneKind = 'application' | 'source' | 'task' | 'reminder' | 'note';
+export type LaneKind = 'application' | 'source' | 'task' | 'routine' | 'reminder' | 'note';
 
 export const STAGES = ['Researching', 'Drafting', 'Submitted', 'Awarded', 'Declined'] as const;
 export type Stage = (typeof STAGES)[number];
@@ -24,6 +24,17 @@ export interface ChecklistItem {
   id: string;
   text: string;
   done: boolean;
+}
+
+export type RepeatEvery = 'day' | 'week' | 'month';
+
+/** A recurring task has no deadline; it comes back every day, week or month. */
+export interface Repeat {
+  every: RepeatEvery;
+  /** Times per week or month ("3 times a week"). Daily tasks are once a day. */
+  times: number;
+  /** Weekly only: set weekdays (0 = Sunday). When set, they decide how many times. */
+  days?: number[];
 }
 
 /** A link to double-check (funder page, guideline, citation). */
@@ -49,11 +60,32 @@ export interface Note {
   amount?: string;
   checklist: ChecklistItem[];
   links: SourceLink[];
+  /** Recurring tasks only. */
+  repeat?: Repeat;
+  /** Recurring tasks: when each "Did it" was logged (ISO date-times). */
+  completions?: string[];
   pinned: boolean;
   done: boolean;
   doneAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/** What moves a goal's progress bar. */
+export type GoalMeasure = 'submitted' | 'won' | 'count';
+
+/** A target with a progress bar on the wall, like "Submit 5 applications by Dec 31". */
+export interface Goal {
+  id: string;
+  title: string;
+  /** Submitted applications, money from awarded ones, or a number kept by hand. */
+  measure: GoalMeasure;
+  target: number;
+  /** Progress so far for `count` goals. */
+  count: number;
+  /** Optional finish date, `YYYY-MM-DD`. */
+  by?: string;
+  createdAt: string;
 }
 
 export type NightMode = 'auto' | 'on' | 'off';
@@ -75,6 +107,7 @@ export interface Alert {
 export interface Board {
   lanes: Lane[];
   notes: Note[];
+  goals: Goal[];
   settings: Settings;
   alerts: Alert[];
 }

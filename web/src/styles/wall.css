@@ -22,6 +22,7 @@
   --tone-week: #eadca6;
   --tone-later: #a39a8c;
   --tone-remind: #ffb8cb;
+  --tone-good: #8fd6a8;
 
   position: relative;
   display: flex;
@@ -53,8 +54,9 @@
 /* Header */
 .wall-head {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: end;
+  gap: calc(var(--u) * 3);
 }
 
 .wall-date {
@@ -78,10 +80,92 @@
   letter-spacing: -0.01em;
 }
 
-.wall-summary {
+/* Goals: a progress bar each, between the date and the clock */
+.wall-goals {
   display: flex;
-  gap: calc(var(--u) * 0.8);
+  justify-content: center;
+  align-items: flex-start;
   align-self: center;
+  gap: calc(var(--u) * 1.4);
+  min-width: 0;
+}
+
+.wall-goal {
+  flex: 0 1 calc(var(--u) * 21);
+  min-width: 0;
+  padding: calc(var(--u) * 0.85) calc(var(--u) * 1.1) calc(var(--u) * 0.9);
+  border-radius: calc(var(--u) * 0.5);
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 0 0 1px var(--w-line);
+}
+
+.wall-goal-title {
+  display: block;
+  overflow: hidden;
+  font-size: calc(var(--u) * 1.1);
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.wall-goal-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(var(--u) * 0.8);
+  margin-top: calc(var(--u) * 0.5);
+}
+
+.wall-goal-value {
+  flex: none;
+  margin-left: auto;
+  color: var(--paper);
+  font-size: calc(var(--u) * 1.1);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.wall-goal .goal-bar {
+  position: relative;
+  display: block;
+  height: calc(var(--u) * 0.7);
+  margin-top: calc(var(--u) * 0.6);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.wall-goal .goal-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  min-width: calc(var(--u) * 0.7);
+  border-radius: inherit;
+  background: var(--paper);
+}
+
+.wall-goal .goal-bar-pace {
+  position: absolute;
+  top: calc(var(--u) * -0.3);
+  bottom: calc(var(--u) * -0.3);
+  width: calc(var(--u) * 0.16);
+  margin-left: calc(var(--u) * -0.08);
+  border-radius: 999px;
+  background: var(--w-ink);
+  opacity: 0.75;
+}
+
+.wall-goal-sub {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--w-muted);
+  font-size: calc(var(--u) * 0.9);
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.wall-goal.is-complete .wall-goal-sub {
+  color: var(--tone-good);
+  font-weight: 800;
 }
 
 .pill {
@@ -184,9 +268,9 @@
 
 .wall-col-title {
   overflow: hidden;
-  font-size: calc(var(--u) * 1.2);
+  font-size: calc(var(--u) * 1.1);
   font-weight: 800;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -332,6 +416,28 @@
   height: calc(var(--u) * 0.5);
   border-radius: 50%;
   background: var(--paper);
+}
+
+.wall-up-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--u) * 0.6);
+  margin-bottom: calc(var(--u) * 0.5);
+}
+
+.wall-up-head .wall-side-title {
+  margin: 0;
+}
+
+.wall-up-pills {
+  display: flex;
+  gap: calc(var(--u) * 0.45);
+}
+
+.wall-up-pills .pill {
+  padding: calc(var(--u) * 0.25) calc(var(--u) * 0.7);
+  font-size: calc(var(--u) * 0.85);
 }
 
 .wall-side-title {
@@ -572,8 +678,21 @@
 .wall-mode-dim .wall-connect,
 .wall-mode-dim .swatch,
 .wall-mode-dim .dot,
+.wall-mode-dim .goal-bar-fill,
 .wall-mode-dim .wall-cal-day.is-today .wall-cal-num {
   filter: brightness(0.48) saturate(0.7);
+}
+
+.wall-mode-dim .wall-goal-value {
+  color: var(--w-muted);
+}
+
+.wall-mode-dim .wall-goal {
+  background: transparent;
+}
+
+.wall-mode-dim .note.is-rested {
+  filter: brightness(0.36) saturate(0.4);
 }
 
 .wall-mode-dim .note,

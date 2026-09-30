@@ -1,9 +1,16 @@
 import { useEffect } from 'react';
-import { X } from 'lucide-react';
+import { Target, X } from 'lucide-react';
 import type { LaneKind } from '../../../shared/types.ts';
 import { TEMPLATES } from './templates.ts';
 
-export function AddMenu({ onPick, onClose, desktop }: { onPick: (kind: LaneKind) => void; onClose: () => void; desktop: boolean }) {
+interface Props {
+  onPick: (kind: LaneKind) => void;
+  onGoal: () => void;
+  onClose: () => void;
+  desktop: boolean;
+}
+
+export function AddMenu({ onPick, onGoal, onClose, desktop }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -34,6 +41,17 @@ export function AddMenu({ onPick, onClose, desktop }: { onPick: (kind: LaneKind)
               </button>
             </li>
           ))}
+          <li className="add-divider">
+            <button type="button" className="add-item" onClick={onGoal}>
+              <span className="add-icon add-icon-goal">
+                <Target aria-hidden="true" />
+              </span>
+              <span className="add-text">
+                <span className="add-title">Goal</span>
+                <span className="add-hint">A target with a progress bar, like 5 applications by December</span>
+              </span>
+            </button>
+          </li>
         </ul>
       </div>
     </div>

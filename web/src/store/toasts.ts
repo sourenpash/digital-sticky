@@ -14,7 +14,7 @@ const emit = () => listeners.forEach(listener => listener());
 
 export function showToast(toast: Omit<Toast, 'id'>, ms = 5000): void {
   const id = uid();
-  toasts = [...toasts, { ...toast, id }];
+  toasts = [...toasts, { ...toast, id }].slice(-2); // two at most, newest last
   emit();
   window.setTimeout(() => dismissToast(id), ms);
 }
