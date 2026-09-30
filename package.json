@@ -1,0 +1,39 @@
+{
+  "name": "digital-sticky",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A sticky-note wall, calendar and reminder board for a wall-mounted screen, edited from your phone or computer.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:preview-page": "vite build --mode artifact && node scripts/inline-artifact.ts",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
+    "test": "vitest run",
+    "screenshots": "node scripts/screenshots.ts"
+  },
+  "dependencies": {
+    "@fontsource-variable/lexend": "^5.3.0",
+    "@fontsource-variable/shantell-sans": "^5.3.0",
+    "date-fns": "^4.4.0",
+    "lucide-react": "^1.49.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "playwright-core": "^1.56.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  }
+}

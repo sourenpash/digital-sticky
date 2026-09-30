@@ -1,0 +1,199 @@
+/* A paper square. Everything inside scales with --s (its size in px). */
+.note {
+  --s: 160px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: var(--s);
+  height: var(--s);
+  padding: calc(var(--s) * 0.085) calc(var(--s) * 0.09) calc(var(--s) * 0.08);
+  border: 0;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0) 13%), var(--paper, var(--paper-yellow));
+  color: var(--paper-ink);
+  font: inherit;
+  text-align: left;
+  transform: rotate(var(--tilt, 0deg));
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.22),
+    0 calc(var(--s) * 0.035) calc(var(--s) * 0.08) rgba(0, 0, 0, 0.32);
+  overflow: hidden;
+}
+
+button.note {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+@media (hover: hover) {
+  button.note:hover {
+    transform: rotate(0deg) translateY(-2px);
+  }
+}
+
+button.note:active {
+  transform: rotate(0deg) scale(0.98);
+}
+
+.note.is-selected {
+  transform: rotate(0deg);
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.note-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+  min-height: calc(var(--s) * 0.09);
+}
+
+.note-stage {
+  font-size: calc(var(--s) * 0.062);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.66;
+}
+
+.note-pin {
+  width: calc(var(--s) * 0.09);
+  height: calc(var(--s) * 0.09);
+  opacity: 0.6;
+  flex: none;
+}
+
+.note-title {
+  display: -webkit-box;
+  margin-top: calc(var(--s) * 0.025);
+  overflow: hidden;
+  font-family: var(--font-title);
+  font-size: calc(var(--s) * 0.118);
+  font-weight: 650;
+  line-height: 1.12;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow-wrap: anywhere;
+}
+
+.note.title-short .note-title {
+  font-size: calc(var(--s) * 0.135);
+}
+
+.note.title-long .note-title {
+  font-size: calc(var(--s) * 0.1);
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+}
+
+.note.title-xlong .note-title {
+  font-size: calc(var(--s) * 0.088);
+  -webkit-line-clamp: 5;
+  line-clamp: 5;
+}
+
+.note-meta {
+  margin-top: calc(var(--s) * 0.03);
+  overflow: hidden;
+  font-size: calc(var(--s) * 0.068);
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0.72;
+}
+
+.note-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(var(--s) * 0.035);
+  margin-top: auto;
+  padding-top: calc(var(--s) * 0.03);
+}
+
+.note-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--s) * 0.06);
+  font-size: calc(var(--s) * 0.066);
+  font-weight: 800;
+}
+
+.flag {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--s) * 0.02);
+  opacity: 0.75;
+}
+
+.flag svg {
+  width: 1.15em;
+  height: 1.15em;
+}
+
+.flag-warn {
+  color: #8f3c00;
+  opacity: 1;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  max-width: 100%;
+  padding: 0.28em 0.6em;
+  border-radius: 999px;
+  font-size: calc(var(--s) * 0.074);
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.chip svg {
+  flex: none;
+  width: 1em;
+  height: 1em;
+}
+
+.chip-overdue { background: #c62828; color: #fff; }
+.chip-today { background: #dd4f1c; color: #fff; }
+.chip-soon { background: #ef8a2a; color: #2a190a; }
+.chip-week { background: rgba(42, 39, 35, 0.86); color: #fff; }
+.chip-later { background: rgba(42, 39, 35, 0.1); color: var(--paper-ink); }
+.chip-remind { background: rgba(42, 39, 35, 0.86); color: #fff; }
+.chip-good { background: #1f7a4d; color: #fff; }
+.chip-muted { background: rgba(42, 39, 35, 0.1); color: rgba(42, 39, 35, 0.72); }
+
+.note.is-done {
+  filter: saturate(0.35) brightness(0.8);
+}
+
+.note.is-done .note-title {
+  text-decoration: line-through;
+  text-decoration-thickness: 0.08em;
+}
+
+.note-stamp {
+  position: absolute;
+  right: calc(var(--s) * 0.07);
+  bottom: calc(var(--s) * 0.07);
+  display: grid;
+  place-items: center;
+  width: calc(var(--s) * 0.3);
+  height: calc(var(--s) * 0.3);
+  border: calc(var(--s) * 0.018) solid #1f7a4d;
+  border-radius: 50%;
+  color: #1f7a4d;
+  transform: rotate(-12deg);
+}
+
+.note-stamp svg {
+  width: 60%;
+  height: 60%;
+  stroke-width: 3;
+}
