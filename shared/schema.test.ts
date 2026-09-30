@@ -2,7 +2,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { z } from 'zod';
 import { makeEmptyBoard } from './defaults.ts';
 import { makeSampleBoard } from './sample.ts';
-import { boardSchema, describeIssues, goalSchema, laneSchema, newNoteSchema, notePatchSchema, noteSchema, savedFileSchema, settingsPatchSchema, settingsSchema } from './schema.ts';
+import { boardSchema, describeIssues, goalSchema, laneSchema, newNoteSchema, notePatchSchema, noteSchema, remoteRequestSchema, savedFileSchema, settingsPatchSchema, settingsSchema } from './schema.ts';
 import type { Goal, Lane, Note, Settings } from './types.ts';
 
 describe('schema', () => {
@@ -52,6 +52,18 @@ describe('schema', () => {
     expect(settingsPatchSchema.safeParse({ ticker: { crypto: ['btc'] } }).success).toBe(false);
     expect(settingsPatchSchema.safeParse({ ticker: { news: ['javascript:alert(1)'] } }).success).toBe(false);
     expect(settingsPatchSchema.safeParse({ ticker: { stocks: Array.from({ length: 21 }, (_, i) => `S${i}`) } }).success).toBe(false);
+  });
+
+  it('checks remote commands and cuts huge moves down', () => {
+    const parsed = remoteRequestSchema.parse({ commands: [{ type: 'move', dx: 1e9, dy: -3 }, { type: 'key', key: 'Enter' }, { type: 'open', url: 'https://example.com' }] });
+    expect(parsed.commands[0]).toEqual({ type: 'move', dx: 5000, dy: -3 });
+    expect(remoteRequestSchema.safeParse({ commands: [] }).success).toBe(false);
+    expect(remoteRequestSchema.safeParse({ commands: [{ type: 'key', key: 'F12' }] }).success).toBe(false);
+    expect(remoteRequestSchema.safeParse({ commands: [{ type: 'open', url: 'javascript:alert(1)' }] }).success).toBe(false);
+    expect(remoteRequestSchema.safeParse({ commands: [{ type: 'open', url: 'chrome://settings' }] }).success).toBe(false);
+    expect(remoteRequestSchema.safeParse({ commands: [{ type: 'text', text: '' }] }).success).toBe(false);
+    expect(remoteRequestSchema.safeParse({ commands: [{ type: 'eval', code: '1' }] }).success).toBe(false);
+    expect(remoteRequestSchema.safeParse({ commands: Array.from({ length: 101 }, () => ({ type: 'click' })) }).success).toBe(false);
   });
 
   it('does not let required fields be cleared', () => {

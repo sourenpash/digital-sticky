@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { DEFAULT_SETTINGS } from './defaults.ts';
+import { MAX_REMOTE_COMMANDS, MAX_REMOTE_STEP, MAX_REMOTE_TEXT, REMOTE_KEYS } from './remote.ts';
 import { CRYPTO_SYMBOL, MAX_CRYPTO, MAX_NEWS, MAX_STOCKS, NEWS_SOURCE_IDS, STOCK_SYMBOL } from './ticker.ts';
 import { APP_TYPES, GOAL_MEASURES, LANE_KINDS, NIGHT_MODES, NIGHT_STYLES, NOTE_COLORS, REPEAT_EVERY, STAGES } from './types.ts';
 
@@ -195,6 +196,25 @@ export const boardSchema = z.object({
   settings: settingsSchema,
   alerts: z.array(alertSchema).max(MAX_ALERTS),
 });
+
+/** A remote move or scroll step: any size is accepted, but a huge one is cut down. */
+const step = z.number().transform(value => Math.max(-MAX_REMOTE_STEP, Math.min(MAX_REMOTE_STEP, value)));
+
+export const remoteCommandSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('move'), dx: step, dy: step }),
+  z.object({ type: z.literal('click') }),
+  z.object({ type: z.literal('scroll'), dx: step, dy: step }),
+  z.object({ type: z.literal('text'), text: z.string().min(1).max(MAX_REMOTE_TEXT) }),
+  z.object({ type: z.literal('key'), key: z.enum(REMOTE_KEYS) }),
+  z.object({ type: z.literal('back') }),
+  z.object({ type: z.literal('reload') }),
+  z.object({ type: z.literal('board') }),
+  z.object({ type: z.literal('open'), url: webAddress }),
+  z.object({ type: z.literal('dialog'), accept: z.boolean() }),
+]);
+
+/** POST /api/remote */
+export const remoteRequestSchema = z.object({ commands: z.array(remoteCommandSchema).min(1).max(MAX_REMOTE_COMMANDS) });
 
 /** Deleted things wait here for 30 days so Undo works, even from another device. */
 export const trashSchema = z.object({

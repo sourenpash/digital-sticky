@@ -32,11 +32,15 @@ interface Shot {
   empty?: boolean;
   /** Change the board through the API before the page opens. */
   setup?: (api: Api) => Promise<void>;
-  act?: (page: Page, server: RunningServer) => Promise<void>;
+  act?: (page: Page, server: RunningServer, kiosk: Page | null) => Promise<void>;
   /** Commit this one to docs/screenshots. */
   keep?: boolean;
   /** Lock the board with a PIN, and open the page as a phone on the Wi-Fi (not the wall computer). */
   pin?: boolean;
+  /** Run the wall computer's browser too (for the remote), showing what this opens. */
+  kiosk?: (kiosk: Page, base: string) => Promise<void>;
+  /** Save the wall computer's browser instead of the page. */
+  shootKiosk?: boolean;
 }
 
 const phone = { width: 390, height: 844 };
@@ -76,6 +80,13 @@ const showSetting = (name: string) => async (page: Page) => {
   await page.getByRole('heading', { name }).evaluate(el => el.scrollIntoView({ block: 'start' }));
   await page.waitForTimeout(300);
 };
+
+/** Made-up websites for the wall computer's browser. */
+const site = (title: string, body: string) =>
+  `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><title>${title}</title><style>body{margin:0;height:100vh;display:grid;place-items:center;background:#f6f4ef;color:#2a2723;font:28px system-ui,sans-serif}input,button{font:inherit}input{width:640px;padding:16px 26px;border:2px solid #c9c4ba;border-radius:999px;background:#fff}</style>${body}`)}`;
+const recipes = site('Recipes · Search', '<form><h1>What are we cooking?</h1><input id="q" placeholder="Search recipes" autofocus></form>');
+const playlists = site('My playlists', '<main><h1>Evening focus</h1><p>42 songs</p></main>');
+const waitConnected = (page: Page) => page.getByText('Connected', { exact: true }).waitFor({ timeout: 10_000 });
 
 const shots: Shot[] = [
   { keep: true, name: 'wall-day', hash: 'wall', viewport: hd },
@@ -161,14 +172,66 @@ const shots: Shot[] = [
   { name: 'phone-to-check', hash: 'check', ...onPhone },
   { keep: true, name: 'phone-wall-settings', hash: 'display', ...onPhone, act: showSetting('Columns') },
   { keep: true, name: 'phone-ticker-settings', hash: 'display', ...onPhone, act: showSetting('Ticker') },
-  { keep: true, name: 'phone-remote', hash: 'remote', ...onPhone },
   {
-    name: 'phone-remote-keyboard',
+    keep: true,
+    name: 'phone-remote',
     hash: 'remote',
     ...onPhone,
+    kiosk: kiosk => kiosk.goto(recipes).then(() => {}),
     act: async page => {
-      await page.getByRole('button', { name: 'Keyboard' }).click();
-      await page.waitForTimeout(300);
+      await waitConnected(page);
+      await page.getByText('Tap to type').waitFor({ timeout: 10_000 });
+    },
+  },
+  {
+    keep: true,
+    name: 'phone-remote-typing',
+    hash: 'remote',
+    ...onPhone,
+    kiosk: kiosk => kiosk.goto(recipes).then(() => {}),
+    act: async page => {
+      await waitConnected(page);
+      await page.getByRole('button', { name: /Tap to type/ }).click();
+      await page.keyboard.type('banana bread');
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    keep: true,
+    name: 'phone-remote-question',
+    hash: 'remote',
+    ...onPhone,
+    kiosk: async kiosk => {
+      kiosk.on('dialog', () => {}); // leave it open for the phone to answer
+      await kiosk.goto(playlists);
+    },
+    act: async (page, _server, kiosk) => {
+      await waitConnected(page);
+      await kiosk?.evaluate(() => void setTimeout(() => confirm('Delete this playlist?'), 0));
+      await page.locator('.remote-dialog').waitFor({ timeout: 10_000 });
+    },
+  },
+  { name: 'phone-remote-offline', hash: 'remote', ...onPhone },
+  {
+    keep: true,
+    name: 'wall-remote-cursor',
+    hash: 'remote',
+    ...onPhone,
+    shootKiosk: true,
+    kiosk: async (kiosk, base) => {
+      await kiosk.goto(`${base}/?now=${NOW}#wall`);
+      await kiosk.locator('.wall').waitFor();
+      await kiosk.evaluate(() => document.fonts.ready);
+    },
+    act: async (page, _server, kiosk) => {
+      await waitConnected(page);
+      const pad = await page.locator('.pad').boundingBox();
+      if (!pad) throw new Error('no touchpad');
+      await page.mouse.move(pad.x + pad.width * 0.5, pad.y + pad.height * 0.5);
+      await page.mouse.down();
+      for (let i = 1; i <= 10; i++) await page.mouse.move(pad.x + pad.width * (0.5 - i * 0.031), pad.y + pad.height * (0.5 - i * 0.0085));
+      await page.mouse.up();
+      await kiosk?.waitForTimeout(800);
     },
   },
   { keep: true, name: 'desktop-board', hash: 'board', viewport: desktop, act: openNsf },
@@ -183,7 +246,9 @@ const staticDir = resolve('dist/web');
 const { buildId } = JSON.parse(await readFile(join(staticDir, 'build.json'), 'utf8')) as { buildId: string };
 await mkdir(OUT, { recursive: true });
 await mkdir(REVIEW, { recursive: true });
-const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM ?? '/opt/pw-browsers/chromium' });
+const executablePath = process.env.PW_CHROMIUM ?? '/opt/pw-browsers/chromium';
+const browser = await chromium.launch({ executablePath });
+const KIOSK_DEBUG_PORT = 9555;
 
 try {
   for (const shot of shots) {
@@ -202,8 +267,13 @@ try {
       now: () => new Date(Date.now() + offset),
       tickerFetch: fakeTickerFetch,
       pin: shot.pin ? '482915' : null,
+      remoteDebugPort: shot.kiosk ? KIOSK_DEBUG_PORT : null,
     });
     const base = `http://127.0.0.1:${PORT}`;
+    // The wall computer's browser, with the debugging port the remote uses.
+    const kioskBrowser = shot.kiosk ? await chromium.launch({ executablePath, args: [`--remote-debugging-port=${KIOSK_DEBUG_PORT}`] }) : null;
+    const kiosk = kioskBrowser ? await (await kioskBrowser.newContext({ viewport: hd })).newPage() : null;
+    if (kiosk) await shot.kiosk?.(kiosk, base);
     const api: Api = {
       get: async path => (await fetch(base + path)).json(),
       send: async (method, path, body) =>
@@ -225,12 +295,13 @@ try {
     await page.locator('.wall, .editor, .demo, .remote, .login').first().waitFor();
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(700);
-    if (shot.act) await shot.act(page, server);
+    if (shot.act) await shot.act(page, server, kiosk);
     const path = `${shot.keep ? OUT : REVIEW}/${shot.name}.png`;
-    await page.screenshot({ path });
+    await (shot.shootKiosk && kiosk ? kiosk : page).screenshot({ path });
     console.log(`saved ${path}`);
     await context.close();
     await server.stop();
+    await kioskBrowser?.close();
     await rm(dataDir, { recursive: true, force: true });
   }
 } finally {

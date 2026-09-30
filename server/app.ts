@@ -18,12 +18,15 @@ import {
   newLaneSchema,
   newNoteSchema,
   notePatchSchema,
+  remoteRequestSchema,
   settingsPatchSchema,
 } from '../shared/schema.ts';
+import type { RemoteStatus } from '../shared/remote.ts';
 import type { Goal, Lane, Note } from '../shared/types.ts';
 import type { Auth } from './auth.ts';
 import type { EventHub } from './events.ts';
 import { hostAllowed } from './hosts.ts';
+import { RemoteError, type KioskRemote } from './remote.ts';
 import type { TickerFeed } from './ticker.ts';
 import { newId, StoreError, type BoardStore } from './store.ts';
 
@@ -35,13 +38,15 @@ export interface AppOptions {
   /** The built web app (dist/web), or null to serve only the API. */
   staticDir: string | null;
   /** Address phones can open, shown on the wall's "Connect your phone" card. */
-  connectUrl: string | null;
+  connectUrl: string | null | (() => string | null);
   /** Set when there's a PIN: everything but signing in needs it. */
   auth?: Auth | null;
   /** Names to answer to besides this computer's own and home-network ones. */
   allowedHosts?: readonly string[];
   /** Live prices and headlines for the wall's ticker. */
   ticker?: TickerFeed | null;
+  /** The phone remote, which drives the wall computer's browser; null when it's off. */
+  remote?: Pick<KioskRemote, 'status' | 'run'> | null;
 }
 
 /** Open without the PIN: checking the server is up, and signing in and out. */
@@ -70,7 +75,7 @@ function isJson(contentType: string | undefined): boolean {
   return /^application\/json\b/i.test(contentType ?? '');
 }
 
-export function createApp({ store, hub, buildId, staticDir, connectUrl, auth = null, allowedHosts = [], ticker = null }: AppOptions): Hono {
+export function createApp({ store, hub, buildId, staticDir, connectUrl, auth = null, allowedHosts = [], ticker = null, remote = null }: AppOptions): Hono {
   const app = new Hono();
   const stamp = () => store.now().toISOString();
 
@@ -152,7 +157,7 @@ export function createApp({ store, hub, buildId, staticDir, connectUrl, auth = n
   api.get('/state', c => {
     c.header('Cache-Control', 'no-store');
     const { epoch, rev, board } = store.snapshot();
-    return c.json({ epoch, rev, board, connectUrl } satisfies StateResponse);
+    return c.json({ epoch, rev, board, connectUrl: typeof connectUrl === 'function' ? connectUrl() : connectUrl } satisfies StateResponse);
   });
 
   api.get('/ticker', c => {
@@ -250,6 +255,23 @@ export function createApp({ store, hub, buildId, staticDir, connectUrl, auth = n
   });
 
   api.delete('/alerts/:id', c => changed(c, store, store.apply({ type: 'alert.dismiss', id: c.req.param('id') })));
+
+  // The phone remote: what the wall shows, and touchpad, typing and buttons.
+  api.get('/remote', async c => {
+    c.header('Cache-Control', 'no-store');
+    return c.json(remote ? await remote.status() : ({ available: false, reason: 'off' } satisfies RemoteStatus));
+  });
+
+  api.post('/remote', async c => {
+    const { commands } = await readBody(c, remoteRequestSchema);
+    if (!remote) return c.json({ error: 'Remote control is turned off', available: false, reason: 'off' }, 503);
+    try {
+      return c.json(await remote.run(commands));
+    } catch (error) {
+      if (!(error instanceof RemoteError)) throw error;
+      return c.json({ error: error.message, ...(error.reason ? { available: false, reason: error.reason } : {}) }, error.status);
+    }
+  });
 
   // "Reload the wall" in the app: every screen showing the wall reloads itself.
   api.post('/wall/reload', c => {

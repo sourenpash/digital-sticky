@@ -14,6 +14,8 @@ export interface Config {
   trustLocalhost: boolean;
   /** Extra names the board answers to. */
   allowedHosts: string[];
+  /** The wall browser's debugging port (for the phone remote), or null to turn the remote off. */
+  kioskDebugPort: number | null;
 }
 
 /** Settings come from environment variables (or a .env file) and a few flags. */
@@ -24,6 +26,11 @@ export function readConfig(env: NodeJS.ProcessEnv, argv: string[]): Config {
   const pin = env.BOARD_PIN?.trim() || null;
   if (pin !== null && !/^\d{6,12}$/.test(pin)) {
     throw new Error('BOARD_PIN must be 6 to 12 digits. Run `npm run pin` to set it, or remove it from .env for an open board.');
+  }
+  const debug = (env.KIOSK_DEBUG_PORT ?? '').trim();
+  const kioskDebugPort = /^(0|off|false|no)$/i.test(debug) ? null : Number(debug || 9222);
+  if (kioskDebugPort !== null && (!Number.isInteger(kioskDebugPort) || kioskDebugPort < 1 || kioskDebugPort > 65_535 || kioskDebugPort === port)) {
+    throw new Error(`KIOSK_DEBUG_PORT must be a port number other than PORT, or "off", not "${env.KIOSK_DEBUG_PORT}"`);
   }
   const publicHost = env.PUBLIC_URL ? hostOf(env.PUBLIC_URL) : null;
   const allowedHosts = (env.ALLOWED_HOSTS ?? '')
@@ -39,6 +46,7 @@ export function readConfig(env: NodeJS.ProcessEnv, argv: string[]): Config {
     pin,
     trustLocalhost: !/^(0|false|no|off)$/i.test(env.TRUST_LOCALHOST ?? ''),
     allowedHosts: publicHost ? [...allowedHosts, publicHost] : allowedHosts,
+    kioskDebugPort,
   };
 }
 

@@ -229,6 +229,13 @@ export class SyncEngine {
     if (!this.server || change.epoch !== this.server.epoch || change.rev > this.server.rev) void this.refresh();
   }
 
+  /** The server's address for phones changed (the network came up after the server did). */
+  setConnectUrl(connectUrl: string | null): void {
+    if (!this.server || this.server.connectUrl === connectUrl) return;
+    this.server = { ...this.server, connectUrl };
+    this.updateState();
+  }
+
   setStreamUp(up: boolean): void {
     if (up) this.everUp = true;
     if (this.streamUp === up) return;
@@ -253,6 +260,8 @@ export class SyncEngine {
   private adopt(next: StateResponse): void {
     const current = this.server;
     if (current && current.epoch === next.epoch && next.rev <= current.rev) {
+      // Nothing new on the board, but the phone address can still have changed.
+      if (next.connectUrl !== current.connectUrl) this.server = { ...current, connectUrl: next.connectUrl };
       this.updateState();
       return;
     }

@@ -1,7 +1,10 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { ArrowLeft, ChevronLeft, CornerDownLeft, Delete, Globe, House, Keyboard, MousePointer2, RotateCw } from 'lucide-react';
-import { remote, type RemoteKey } from '../store/remote.ts';
-import { normalizeUrl } from './NoteEditor.tsx';
+import { flushSync } from 'react-dom';
+import { ArrowLeft, ChevronLeft, CornerDownLeft, Delete, Globe, House, Keyboard, MousePointer2, RotateCw, TextCursorInput } from 'lucide-react';
+import { typingChange, websiteUrl } from '../lib/remoteInput.ts';
+import type { RemoteField } from '../../../shared/remote.ts';
+import { liveRemote, previewRemote, useRemoteLink, type RemoteController, type RemoteKey, type RemoteLink, type RemotePlace } from '../store/remote.ts';
+import { Toasts } from './Toasts.tsx';
 
 /** Finger travel under this (px) and a lift within this (ms) is a tap, not a drag. */
 const TAP_PX = 8;
@@ -15,10 +18,10 @@ interface Touch {
 }
 
 /**
- * The touchpad: one finger moves the cursor (faster swipes go further), a tap clicks,
- * two fingers scroll.
+ * The touchpad: one finger moves the cursor (faster swipes go further), a tap clicks
+ * (two quick taps double-click), two fingers scroll.
  */
-function Touchpad() {
+function Touchpad({ remote, onTap }: { remote: RemoteController; onTap: () => void }) {
   const touches = useRef(new Map<number, Touch>());
   const gesture = useRef({ startedAt: 0, moved: false, fingers: 0 });
   const [finger, setFinger] = useState<{ x: number; y: number } | null>(null);
@@ -36,18 +39,26 @@ function Touchpad() {
   const move = (e: ReactPointerEvent<HTMLDivElement>) => {
     const touch = touches.current.get(e.pointerId);
     if (!touch) return;
-    const dx = e.clientX - touch.x;
-    const dy = e.clientY - touch.y;
+    let dx = e.clientX - touch.x;
+    let dy = e.clientY - touch.y;
+    let gain = 2.2 * (1 + Math.min(2.5, Math.hypot(dx, dy) / 10));
     touch.x = e.clientX;
     touch.y = e.clientY;
-    if (Math.hypot(e.clientX - touch.startX, e.clientY - touch.startY) > TAP_PX) gesture.current.moved = true;
+    // A finger that hasn't gone far may still be a tap: hold its movement back, so taps
+    // don't nudge the cursor (and two taps stay a double click). Once it's a drag, catch up.
+    if (!gesture.current.moved) {
+      if (Math.hypot(e.clientX - touch.startX, e.clientY - touch.startY) <= TAP_PX) return;
+      gesture.current.moved = true;
+      dx = e.clientX - touch.startX;
+      dy = e.clientY - touch.startY;
+      gain = 2.2;
+    }
     if (touches.current.size === 1) {
-      const speed = Math.hypot(dx, dy);
-      const gain = 2.2 * (1 + Math.min(2.5, speed / 10));
       remote.move(dx * gain, dy * gain);
       const box = e.currentTarget.getBoundingClientRect();
       setFinger({ x: e.clientX - box.left, y: e.clientY - box.top });
     } else {
+      // Each finger reports its own movement: half each is the pair's.
       remote.scroll(dx / 2, dy / 2);
     }
   };
@@ -59,6 +70,7 @@ function Touchpad() {
     const { startedAt, moved, fingers } = gesture.current;
     if (!moved && fingers === 1 && Date.now() - startedAt < TAP_MS) {
       remote.click();
+      onTap();
       setTapped(n => n + 1);
     }
   };
@@ -97,16 +109,126 @@ const KEYS: Array<{ key: RemoteKey; label: string; icon?: typeof Delete }> = [
 
 type Panel = 'keyboard' | 'website' | null;
 
+/** The phone keyboard to match the text box on the wall (a password stays out of the phone's suggestions). */
+function keyboardFor(field: RemoteField | null): { type: 'text' | 'password'; inputMode: 'text' | 'email' | 'url' | 'decimal' | 'tel' | 'search'; words: boolean } {
+  switch (field) {
+    case 'password':
+      return { type: 'password', inputMode: 'text', words: false };
+    case 'email':
+      return { type: 'text', inputMode: 'email', words: false };
+    case 'url':
+      return { type: 'text', inputMode: 'url', words: false };
+    case 'number':
+      return { type: 'text', inputMode: 'decimal', words: false };
+    case 'tel':
+      return { type: 'text', inputMode: 'tel', words: false };
+    case 'search':
+      return { type: 'text', inputMode: 'search', words: true };
+    default:
+      return { type: 'text', inputMode: 'text', words: true };
+  }
+}
+
+function statusChip(link: RemoteLink, live: boolean): { text: string; on: boolean } {
+  if (!live) return { text: 'Preview', on: false };
+  switch (link.state) {
+    case 'ready':
+      return { text: 'Connected', on: true };
+    case 'checking':
+      return { text: 'Connecting…', on: false };
+    case 'offline':
+      return { text: 'Offline', on: false };
+    default:
+      return { text: 'Not connected', on: false };
+  }
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+/** A line about the connection, or about what the wall shows when it isn't the board. */
+function RemoteNote({ link, live, preview }: { link: RemoteLink; live: boolean; preview: boolean }) {
+  if (preview) return <p className="remote-note">Drag on the touchpad and watch the cursor on the wall.</p>;
+  if (!live) return <p className="remote-note">On the wall computer this moves a cursor on the wall screen and types there. Here you can try the controls.</p>;
+  if (link.state === 'offline') return <p className="remote-note">Can’t reach the board. Is this phone on the same Wi-Fi as the wall computer?</p>;
+  if (link.state === 'unavailable') {
+    return (
+      <p className="remote-note">
+        {link.reason === 'off'
+          ? 'Remote control is turned off on the wall computer (KIOSK_DEBUG_PORT is off in its .env file).'
+          : 'Can’t find the wall’s browser. The remote works when the wall screen is started by the installer, which turns remote control on. Restart the wall computer, or run scripts/linux/kiosk.sh on it.'}
+      </p>
+    );
+  }
+  if (link.state === 'ready' && !link.onBoard) {
+    return (
+      <p className="remote-showing">
+        On the wall: <strong>{link.title || hostOf(link.url)}</strong>
+      </p>
+    );
+  }
+  return null;
+}
+
 /**
  * Control the wall screen from a phone: a touchpad, a keyboard, and a few big buttons.
  * `preview`: next to the wall on the side-by-side page, where it moves a cursor there.
  */
 export function RemoteScreen({ go, preview = false }: { go: (token: string) => void; preview?: boolean }) {
+  // The single-file preview has no wall computer to talk to.
+  const live = !preview && !__DEMO_BUILD__;
+  const remote = live ? liveRemote : previewRemote;
+  const link = useRemoteLink(live);
   const [panel, setPanel] = useState<Panel>(null);
   const [text, setText] = useState('');
+  const [typing, setTyping] = useState(false);
   const [address, setAddress] = useState('');
-  const url = normalizeUrl(address);
-  const toggle = (next: Panel) => setPanel(current => (current === next ? null : next));
+  const typeField = useRef<HTMLInputElement>(null);
+  const addressField = useRef<HTMLInputElement>(null);
+  /** What the wall has been sent from the typing field (it mirrors the field). */
+  const sent = useRef('');
+  const url = websiteUrl(address);
+  const chip = statusChip(link, live);
+
+  const clearTyping = () => {
+    sent.current = '';
+    setText('');
+  };
+
+  // iPhones only bring up the keyboard when focus() happens inside the tap itself, so
+  // the field is rendered right away (flushSync) and focused in the same handler.
+  const open = (next: 'keyboard' | 'website') => {
+    if (panel !== next) flushSync(() => setPanel(next));
+    (next === 'keyboard' ? typeField : addressField).current?.focus();
+  };
+  const toggle = (next: 'keyboard' | 'website') => {
+    if (panel === next) setPanel(null);
+    else open(next);
+  };
+
+  // Keys and buttons move the wall's text cursor, so the typing field starts over after them.
+  const pressKey = (key: RemoteKey) => {
+    remote.key(key);
+    clearTyping();
+  };
+  const goTo = (place: RemotePlace) => {
+    remote.go(place);
+    clearTyping();
+  };
+  const keyboard = keyboardFor(live ? link.field : null);
+
+  const typed = (value: string) => {
+    const { backspaces, text: added } = typingChange(sent.current, value);
+    for (let i = 0; i < backspaces; i++) remote.key('Backspace');
+    if (added) remote.type(added);
+    sent.current = value;
+    setText(value);
+  };
 
   return (
     <div className="remote">
@@ -115,17 +237,39 @@ export function RemoteScreen({ go, preview = false }: { go: (token: string) => v
           <ChevronLeft />
         </button>
         <h1>Wall remote</h1>
-        <span className={`remote-status${remote.connected ? ' is-on' : ''}`}>{preview ? 'Preview' : remote.connected ? 'Connected' : 'Not set up yet'}</span>
+        <span className={`remote-status${chip.on ? ' is-on' : ''}`}>{chip.text}</span>
       </header>
 
-      {preview ? (
-        <p className="remote-note">Drag on the touchpad and watch the cursor on the wall.</p>
-      ) : (
-        !remote.connected && <p className="remote-note">This starts working once the wall computer is set up, in the last step. For now you can try the controls.</p>
+      <RemoteNote link={link} live={live} preview={preview} />
+
+      {live && link.dialog && (
+        <div className="remote-dialog" role="alertdialog" aria-labelledby="remote-dialog-text">
+          <p id="remote-dialog-text">
+            <span>The wall asks:</span> {link.dialog.message || 'OK to go on?'}
+          </p>
+          <div className="remote-dialog-actions">
+            <button type="button" className="btn btn-sm" onClick={() => remote.answer(false)}>
+              Cancel
+            </button>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => remote.answer(true)}>
+              OK
+            </button>
+          </div>
+        </div>
       )}
 
-      <Touchpad />
-      <p className="remote-hint">When a text box on the wall is selected, a “Type into it” button shows up here.</p>
+      <Touchpad remote={remote} onTap={clearTyping} />
+
+      {live && link.state === 'ready' && link.field && !typing ? (
+        <button type="button" className="remote-typebar" onClick={() => open('keyboard')}>
+          <TextCursorInput aria-hidden="true" />
+          <span>
+            A text box is selected on the wall. <strong>Tap to type</strong>
+          </span>
+        </button>
+      ) : (
+        panel !== 'keyboard' && !link.dialog && <p className="remote-hint">Select a text box on the wall to type into it.</p>
+      )}
 
       {panel === 'keyboard' && (
         <div className="remote-panel">
@@ -133,26 +277,34 @@ export function RemoteScreen({ go, preview = false }: { go: (token: string) => v
             className="remote-type"
             onSubmit={e => {
               e.preventDefault();
-              if (text) remote.type(text);
-              remote.key('Enter');
-              setText('');
+              pressKey('Enter');
             }}
           >
             <input
+              ref={typeField}
               aria-label="Type on the wall"
               value={text}
-              placeholder="Type here to type on the wall"
-              autoFocus
-              autoCapitalize="off"
+              placeholder="Letters go to the wall as you type"
+              type={keyboard.type}
+              inputMode={keyboard.inputMode}
+              autoCapitalize={keyboard.words ? 'sentences' : 'off'}
               autoComplete="off"
-              autoCorrect="off"
-              enterKeyHint="send"
-              onChange={e => setText(e.target.value)}
+              autoCorrect={keyboard.words ? 'on' : 'off'}
+              spellCheck={keyboard.words}
+              enterKeyHint="enter"
+              maxLength={2000}
+              onFocus={() => setTyping(true)}
+              onBlur={() => setTyping(false)}
+              onChange={e => typed(e.target.value)}
+              onKeyDown={e => {
+                // Backspace with nothing left here still deletes on the wall.
+                if (e.key === 'Backspace' && e.currentTarget.value === '') remote.key('Backspace');
+              }}
             />
           </form>
           <div className="remote-keys">
             {KEYS.map(({ key, label, icon: Icon }) => (
-              <button key={key} type="button" className="remote-key" aria-label={label} onClick={() => remote.key(key)}>
+              <button key={key} type="button" className="remote-key" aria-label={label} onClick={() => pressKey(key)}>
                 {Icon ? <Icon aria-hidden="true" /> : label}
               </button>
             ))}
@@ -166,12 +318,24 @@ export function RemoteScreen({ go, preview = false }: { go: (token: string) => v
           onSubmit={e => {
             e.preventDefault();
             if (!url) return;
-            remote.go({ url });
+            goTo({ url });
             setAddress('');
             setPanel(null);
           }}
         >
-          <input aria-label="Website to open on the wall" value={address} placeholder="e.g. youtube.com" inputMode="url" autoFocus autoCapitalize="off" autoComplete="off" autoCorrect="off" enterKeyHint="go" onChange={e => setAddress(e.target.value)} />
+          <input
+            ref={addressField}
+            aria-label="Website to open on the wall"
+            value={address}
+            placeholder="e.g. youtube.com"
+            inputMode="url"
+            autoCapitalize="off"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            enterKeyHint="go"
+            onChange={e => setAddress(e.target.value)}
+          />
           <button type="submit" className="btn btn-primary btn-sm" disabled={!url}>
             Open
           </button>
@@ -183,15 +347,15 @@ export function RemoteScreen({ go, preview = false }: { go: (token: string) => v
           <Keyboard aria-hidden="true" />
           <span>Keyboard</span>
         </button>
-        <button type="button" className="remote-btn" onClick={() => remote.go('back')}>
+        <button type="button" className="remote-btn" onClick={() => goTo('back')}>
           <ArrowLeft aria-hidden="true" />
           <span>Back</span>
         </button>
-        <button type="button" className="remote-btn" onClick={() => remote.go('board')}>
+        <button type="button" className={`remote-btn${live && link.state === 'ready' && !link.onBoard ? ' is-hint' : ''}`} onClick={() => goTo('board')}>
           <House aria-hidden="true" />
           <span>Board</span>
         </button>
-        <button type="button" className="remote-btn" onClick={() => remote.go('reload')}>
+        <button type="button" className="remote-btn" onClick={() => goTo('reload')}>
           <RotateCw aria-hidden="true" />
           <span>Reload</span>
         </button>
@@ -200,6 +364,7 @@ export function RemoteScreen({ go, preview = false }: { go: (token: string) => v
           <span>Website</span>
         </button>
       </nav>
+      {live && <Toasts />}
     </div>
   );
 }

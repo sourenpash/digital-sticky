@@ -38,6 +38,11 @@ export interface ChangeEvent {
   rev: number;
 }
 
+/** `connect` event on api/events: the address phones can open changed. */
+export interface ConnectEvent {
+  connectUrl: string | null;
+}
+
 export interface ApiRequest {
   method: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   path: string;

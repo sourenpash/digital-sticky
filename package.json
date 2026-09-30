@@ -13,6 +13,7 @@
     "start": "node server/index.ts",
     "demo": "node server/index.ts --demo",
     "pin": "node scripts/pin.ts",
+    "update": "bash scripts/linux/update.sh",
     "build:preview-page": "vite build --mode artifact && node scripts/inline-artifact.ts",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
     "test": "vitest run",

@@ -31,6 +31,7 @@ function readBuildId(): string {
   }
 }
 
+// For the message below; screens get it fresh each time (at boot the network may not have an address yet).
 const connectUrl = connectUrlFor(config);
 let running;
 try {
@@ -41,12 +42,13 @@ try {
     seed: config.demo ? makeSampleBoard : makeEmptyBoard,
     reset: config.demo,
     staticDir: hasApp ? staticDir : null,
-    connectUrl,
+    connectUrl: () => connectUrlFor(config),
     buildId: readBuildId(),
     log: message => console.log(message),
     pin: config.pin,
     trustLocalhost: config.trustLocalhost,
     allowedHosts: config.allowedHosts,
+    remoteDebugPort: config.kioskDebugPort,
   });
 } catch (error) {
   const code = (error as NodeJS.ErrnoException).code;

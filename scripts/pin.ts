@@ -1,6 +1,11 @@
 // Sets the board's PIN, or removes it: `npm run pin` / `npm run pin -- --off`.
-// The PIN goes in .env (readable only by you); restart the board to use it.
+// The PIN goes in .env (readable only by you). On a wall computer set up with
+// scripts/linux/install.sh, the board restarts to use it; otherwise restart it yourself.
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { readFile, rename, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
 const ENV_FILE = '.env';
@@ -63,11 +68,29 @@ function makePrompt(): { ask: (question: string) => Promise<string>; close: () =
   };
 }
 
+/** Restarts the board's service (from install.sh) so the change applies, or says how to. */
+function restartBoard(): void {
+  // The installer restarts the board itself once it's set up.
+  if (process.argv.includes('--no-restart')) return;
+  const unit = join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'systemd', 'user', 'sticky-wall.service');
+  if (existsSync(unit)) {
+    try {
+      execFileSync('systemctl', ['--user', 'restart', 'sticky-wall.service'], { stdio: 'ignore' });
+      console.log('The board restarted with the change.');
+      return;
+    } catch {
+      // Say how to do it by hand, below.
+    }
+  }
+  console.log('Restart the board to use it: stop it with Ctrl+C, then npm start (or: systemctl --user restart sticky-wall).');
+}
+
 const kept = (await readEnv()).filter(line => !PIN_LINE.test(line));
 
 if (process.argv.includes('--off')) {
   await writeEnv(kept);
-  console.log('PIN removed. Restart the board to open it up: then anyone on your Wi-Fi can open it.');
+  console.log('PIN removed: anyone on your Wi-Fi can open the board.');
+  restartBoard();
   process.exit(0);
 }
 
@@ -85,5 +108,5 @@ if (again !== pin) {
   process.exit(1);
 }
 await writeEnv([...kept, `BOARD_PIN=${pin}`]);
-console.log('PIN saved in .env. Restart the board to use it (stop it with Ctrl+C, then npm start).');
-console.log("Each phone or computer asks for it once. The wall computer itself doesn't need it.");
+console.log("PIN saved. Each phone or computer asks for it once; the wall computer itself doesn't need it.");
+restartBoard();

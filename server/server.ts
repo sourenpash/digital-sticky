@@ -6,6 +6,7 @@ import { createApp } from './app.ts';
 import { Auth, loadSecret } from './auth.ts';
 import { EventHub } from './events.ts';
 import { startReminders } from './reminders.ts';
+import { KioskRemote } from './remote.ts';
 import { TickerFeed, type Fetcher } from './ticker.ts';
 import { BoardStore } from './store.ts';
 
@@ -17,7 +18,8 @@ export interface StartOptions {
   /** Start from the seed even when a saved board exists (demo mode). */
   reset?: boolean;
   staticDir: string | null;
-  connectUrl: string | null;
+  /** The address phones can open (worked out again later: the network may not be up yet at boot). */
+  connectUrl: string | null | (() => string | null);
   buildId: string;
   log?: (message: string) => void;
   /** The server's clock (tests start it at a fixed time). */
@@ -31,6 +33,8 @@ export interface StartOptions {
   allowedHosts?: string[];
   /** How the ticker fetches prices and headlines (tests pass a fake); false turns it off. */
   tickerFetch?: Fetcher | false;
+  /** The wall browser's debugging port on 127.0.0.1, for the phone remote; none turns the remote off. */
+  remoteDebugPort?: number | null;
 }
 
 export interface RunningServer {
@@ -53,6 +57,11 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     : null;
   const ticker = options.tickerFetch === false ? null : new TickerFeed(store, { fetcher: options.tickerFetch, log: options.log });
   ticker?.subscribe(() => hub.broadcast('ticker', {}));
+  // The port is only known once listening (tests ask for any free one).
+  let port = options.port;
+  const remote = options.remoteDebugPort
+    ? new KioskRemote({ port: options.remoteDebugPort, wallUrl: () => `http://localhost:${port}/#wall`, log: options.log })
+    : null;
   const app = createApp({
     store,
     hub,
@@ -62,19 +71,36 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     auth,
     allowedHosts: options.allowedHosts,
     ticker,
+    remote,
   });
 
   const server = await new Promise<Server>((resolve, reject) => {
     const created: ServerType = serve({ fetch: app.fetch, port: options.port, hostname: options.host ?? '0.0.0.0' }, () => resolve(created as Server));
     created.once('error', reject);
   });
-  const { port } = server.address() as AddressInfo;
+  port = (server.address() as AddressInfo).port;
   const stopReminders = startReminders(store, { tickMs: options.reminderTickMs, log: options.log });
   ticker?.start();
+  remote?.start();
+  // Tell open screens when the phone address changes (it's often unknown for a moment at boot).
+  const connectUrl = options.connectUrl;
+  let lastUrl = typeof connectUrl === 'function' ? connectUrl() : connectUrl;
+  const addressWatch =
+    typeof connectUrl === 'function'
+      ? setInterval(() => {
+          const url = connectUrl();
+          if (url === lastUrl) return;
+          lastUrl = url;
+          hub.broadcast('connect', { connectUrl: url });
+        }, 30_000)
+      : null;
+  addressWatch?.unref();
 
   const closeServer = () => {
     stopReminders();
     ticker?.stop();
+    remote?.close();
+    if (addressWatch) clearInterval(addressWatch);
     hub.closeAll();
     server.close();
     server.closeAllConnections();

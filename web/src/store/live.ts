@@ -1,4 +1,4 @@
-import type { ChangeEvent, HelloEvent } from '../../../shared/api.ts';
+import type { ChangeEvent, ConnectEvent, HelloEvent } from '../../../shared/api.ts';
 import type { SyncEngine } from './sync.ts';
 
 /** No message (not even the 20-second ping) for this long means the connection died quietly. */
@@ -51,6 +51,10 @@ export function startLiveUpdates(engine: SyncEngine, { onReloadRequest, onTicker
     es.addEventListener('ticker', () => {
       heard();
       onTicker?.();
+    });
+    es.addEventListener('connect', event => {
+      heard();
+      engine.setConnectUrl((JSON.parse((event as MessageEvent<string>).data) as ConnectEvent).connectUrl);
     });
     es.onerror = () => {
       engine.setStreamUp(false);

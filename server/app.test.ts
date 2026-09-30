@@ -4,9 +4,11 @@ import { join } from 'node:path';
 import type { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { makeEmptyBoard } from '../shared/defaults.ts';
+import type { RemoteCommand, RemoteStatus } from '../shared/remote.ts';
 import type { Board, Note } from '../shared/types.ts';
 import { createApp } from './app.ts';
 import { EventHub } from './events.ts';
+import { RemoteError } from './remote.ts';
 import { BoardStore } from './store.ts';
 
 let dir: string;
@@ -177,6 +179,47 @@ describe('API', () => {
     const body = (await response.json()) as { version: number; trash: { notes: unknown[] } };
     expect(body.version).toBe(1);
     expect(body.trash.notes).toHaveLength(1);
+  });
+
+  it('says the remote is off when the wall browser is not set up for it', async () => {
+    expect(await (await app.request('/api/remote')).json()).toEqual({ available: false, reason: 'off' });
+    const response = await send('POST', '/api/remote', { commands: [{ type: 'click' }] });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ available: false, reason: 'off' });
+  });
+
+  it('passes checked remote commands on, and reports why ones fail', async () => {
+    const ran: RemoteCommand[][] = [];
+    let failure: RemoteError | null = null;
+    const ready: RemoteStatus = { available: true, field: 'text', dialog: null, onBoard: true, title: 'Digital Sticky', url: 'http://localhost:3000/#wall' };
+    const remote = {
+      status: async () => ready,
+      run: async (commands: RemoteCommand[]) => {
+        if (failure) throw failure;
+        ran.push(commands);
+        return ready;
+      },
+    };
+    app = createApp({ store, hub: new EventHub(), buildId: 'test-build', staticDir: null, connectUrl: null, remote });
+
+    expect(await (await app.request('/api/remote')).json()).toEqual(ready);
+    const ok = await send('POST', '/api/remote', { commands: [{ type: 'move', dx: 99_999, dy: 2 }, { type: 'text', text: 'hi' }] });
+    expect(ok.status).toBe(200);
+    expect(ran).toEqual([[{ type: 'move', dx: 5000, dy: 2 }, { type: 'text', text: 'hi' }]]);
+
+    expect((await send('POST', '/api/remote', { commands: [{ type: 'open', url: 'file:///etc/passwd' }] })).status).toBe(400);
+    const notJson = await app.request('/api/remote', { method: 'POST', body: 'type=click' });
+    expect(notJson.status).toBe(415);
+
+    failure = new RemoteError(503, 'Can’t reach the wall’s browser', 'no-browser');
+    const gone = await send('POST', '/api/remote', { commands: [{ type: 'click' }] });
+    expect(gone.status).toBe(503);
+    expect(await gone.json()).toMatchObject({ available: false, reason: 'no-browser' });
+
+    failure = new RemoteError(400, 'That address can’t be opened on the wall');
+    const refused = await send('POST', '/api/remote', { commands: [{ type: 'open', url: 'http://127.0.0.1:9222/json' }] });
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toEqual({ error: 'That address can’t be opened on the wall' });
   });
 
   it('refuses huge requests and unknown paths', async () => {
