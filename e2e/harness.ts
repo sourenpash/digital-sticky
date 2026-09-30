@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright-core';
 import type { Board } from '../shared/types.ts';
 import { startServer, type RunningServer } from '../server/server.ts';
+import { fakeTickerFetch } from './tickerFixtures.ts';
 
 // A real board server in a temp folder, and Chromium pages playing the phone, a
 // computer and the wall. Chromium comes from Playwright's browser folder; set
@@ -32,12 +33,14 @@ export class Harness {
   private readonly query: string;
   /** Where the server's clock starts (it then runs normally), to match `?now=` pages. */
   private readonly startAt: string | undefined;
+  private readonly pin: string | undefined;
   private offset = 0;
 
-  constructor(seed: (now: Date) => Board, { query = '', now }: { query?: string; now?: string } = {}) {
+  constructor(seed: (now: Date) => Board, { query = '', now, pin }: { query?: string; now?: string; pin?: string } = {}) {
     this.seed = seed;
     this.query = query;
     this.startAt = now;
+    this.pin = pin;
   }
 
   async launch(): Promise<void> {
@@ -77,6 +80,8 @@ export class Harness {
       buildId,
       now: () => new Date(Date.now() + this.offset),
       reminderTickMs: 250,
+      pin: this.pin,
+      tickerFetch: fakeTickerFetch,
     });
     this.port = this.server.port;
   }
@@ -86,10 +91,15 @@ export class Harness {
     this.server = null;
   }
 
-  async open(device: Device, hash: string): Promise<Page> {
+  /**
+   * A new browser (its own cookies) showing `hash`. Every page talks to the server on
+   * 127.0.0.1, so it counts as the wall computer; `headers` like X-Forwarded-For make
+   * it look like another device instead.
+   */
+  async open(device: Device, hash: string, { headers }: { headers?: Record<string, string> } = {}): Promise<Page> {
     if (!this.browser) throw new Error('launch() first');
     const phone = device === 'phone';
-    const context = await this.browser.newContext({ viewport: VIEWPORTS[device], isMobile: phone, hasTouch: phone });
+    const context = await this.browser.newContext({ viewport: VIEWPORTS[device], isMobile: phone, hasTouch: phone, extraHTTPHeaders: headers });
     this.contexts.push(context);
     const page = await context.newPage();
     page.on('pageerror', error => this.pageErrors.push(`${device}: ${error.message}`));

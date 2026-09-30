@@ -28,6 +28,10 @@ class FakeServer implements Transport {
   epoch = 'run-1';
   sent: Op[] = [];
   down = false;
+  /** Wants the PIN: every request is answered 401. */
+  locked = false;
+  loads = 0;
+  attempts = 0;
   refuse: { status: number; message: string } | null = null;
   /** Set to hold answers until `release()`. */
   hold = false;
@@ -38,12 +42,16 @@ class FakeServer implements Transport {
   }
 
   async load(): Promise<StateResponse> {
+    this.loads += 1;
     if (this.down) throw new TypeError('Failed to fetch');
+    if (this.locked) throw new HttpError(401, 'Enter the PIN to open the board');
     return this.snapshot();
   }
 
   async send(op: Op): Promise<ChangeResponse> {
+    this.attempts += 1;
     if (this.down) throw new TypeError('Failed to fetch');
+    if (this.locked) throw new HttpError(401, 'Enter the PIN to open the board');
     if (this.refuse) throw new HttpError(this.refuse.status, this.refuse.message);
     this.sent.push(op);
     this.board = applyOp(this.board, op, new Date());
@@ -220,5 +228,45 @@ describe('SyncEngine', () => {
     e.dispatch({ type: 'note.patch', id: 'a', patch: { pinned: true } });
     await vi.runAllTimersAsync();
     expect(errors).toEqual(['That note was deleted on another device.']);
+  });
+
+  it('asks for the PIN when the server wants it, without retrying in a loop', async () => {
+    server.locked = true;
+    const e = new SyncEngine({ transport: server, onError: message => errors.push(message) });
+    await e.refresh();
+    expect(e.getState().status).toBe('locked');
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(server.loads).toBe(1);
+  });
+
+  it('keeps a change made while signed out and sends it after signing in', async () => {
+    const e = engine();
+    server.locked = true;
+    e.dispatch({ type: 'note.patch', id: 'a', patch: { title: 'Kept' } });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(e.getState()).toMatchObject({ status: 'locked', waiting: 1 });
+    expect(titles(e)?.[0]).toBe('Kept');
+    await vi.advanceTimersByTimeAsync(60_000);
+    e.retryNow();
+    e.flushOnExit();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(server.attempts).toBe(1);
+    expect(errors).toEqual([]);
+
+    server.locked = false;
+    e.unlock();
+    await vi.runAllTimersAsync();
+    expect(server.sent).toEqual([{ type: 'note.patch', id: 'a', patch: { title: 'Kept' } }]);
+    expect(e.getState().status).not.toBe('locked');
+  });
+
+  it('notices a sign-in from another tab when the board is fetched again', async () => {
+    const e = engine();
+    server.locked = true;
+    await e.refresh();
+    expect(e.getState().status).toBe('locked');
+    server.locked = false;
+    await e.refresh();
+    expect(e.getState().status).not.toBe('locked');
   });
 });

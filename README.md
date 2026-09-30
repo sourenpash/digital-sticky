@@ -4,27 +4,24 @@ A sticky-note wall for a bedroom monitor. It shows colored squares for applicati
 
 ![The wall screen](docs/screenshots/wall-day.png)
 
-## Status: checkpoint 3, new wall and phone screens
+## Status: checkpoint 4, reminders, PIN, Home Screen and live ticker
 
-This step adds the screens asked for after checkpoint 2. Some are complete; the rest show placeholder data until the step that connects them:
+- **Reminders on your phone.** When a reminder goes off it pops up on the wall (with a chime, never at night) and at the top of every screen of the app, with **Done** and **Dismiss**. A phone that has the app open also shows a short notice. Done on a recurring task logs it for today instead of ending it. Choose how long reminders stay up on the wall (15 minutes to 4 hours) under Wall → Reminders.
+- **Optional PIN.** Run `npm run pin` on the wall computer, then restart the board. Each phone or computer asks for the PIN once and stays signed in (for a year, renewed while it's used). The wall computer itself never asks, because it has no keyboard. Sign a device out under Wall → PIN. Changing the PIN signs everyone out. Five wrong tries lock that device out for 15 minutes.
+- **Add to Home Screen.** In Safari, tap Share → Add to Home Screen. The board opens like an app with its own icon. If there's a PIN, enter it once there too (Home Screen apps keep their own sign-in).
+- **Live ticker.** The wall computer fetches prices every 5 minutes (crypto from CoinGecko; stocks from Yahoo Finance, which can be about 15 minutes behind) and headlines from each site's feed every 15 minutes. No accounts are needed. If a source can't be reached, the last values stay up, marked "As of …".
+- **Wall polish.** The wall keeps the screen awake, says "Reconnecting to the board…" if it loses the server for more than 10 seconds, and shifts by a few pixels every 10 minutes so nothing burns into the screen.
+- **Safer at home.** The board only answers to its own addresses (its IP address, `localhost`, and home-network names like `nuc.local`), so a web page on another site can't reach it through your browser. Add other names with `ALLOWED_HOSTS`.
 
-- **Two-week calendar on the wall.** The month grid with dots is replaced by a strip along the bottom showing today and the next 13 days, with the actual deadlines and reminders written into each day. Busy days are tinted warmer, deadlines within three days are outlined, and overdue ones sit on today in red. "Coming up" keeps its countdowns on the right.
-- **Applications of any kind.** A new application starts by picking what kind it is: grant or funding, job, school or program, fellowship or residency, or other. Each kind starts with its own checklist and uses its own words: a job has a company and a salary, and its good outcome is an "Offer"; a school's is "Accepted". Squares show the kind in small print ("JOB · INTERVIEW"); grants just show the stage. There's a new stage between Submitted and the result: "Interview" (grants and others call it "Shortlisted"). Once an application is submitted its deadline stops counting down, but a reminder you set, such as for the interview, still shows. "Money won" goals count awarded grants and fellowships, not job salaries.
-- **Ticker (placeholder prices).** A ribbon along the bottom edge of the wall slides slowly through crypto and stock prices and tech headlines. It hides at night. Pick the coins, stocks and news sources (Hacker News, The Verge, Ars Technica, TechCrunch, or any RSS feed) under Wall → Ticker. For now it shows made-up values marked "Sample"; live ones come in checkpoint 4.
-- **Phone remote (screen only).** Wall → Control the wall screen opens a touchpad and keyboard for the wall: drag to move the cursor, tap to click, two fingers to scroll, plus Back, Board, Reload and Open a website. On the side-by-side preview page it moves a cursor over the wall. It starts working for real in checkpoint 5, when the wall computer is set up.
-- **Reminders go off by themselves.** At the time you set, a reminder pops up on the wall and goes away after an hour. After a restart, the board catches up on reminders missed by less than a day.
-
-Still true from checkpoint 2: the board is saved on the wall computer (with daily backups and a 30-day trash for Undo), every screen updates live, and changes made offline are sent when the connection is back.
+From checkpoint 3: the two-week calendar strip, application types (grant, job, school, fellowship, other), the ticker settings and the phone remote screen. The remote starts working in checkpoint 5.
 
 | Checkpoint | What it adds | Status |
 | --- | --- | --- |
 | 1 | Clickable prototype of the wall, phone and computer screens, with placeholder data | Done |
 | 2 | Real data and live sync: a small server on the wall computer that saves the board to disk | Done |
-| 3 | Two-week calendar, application types, ticker and phone remote screens; reminders on a timer | Ready for review |
-| 4 | Reminders on your phone, PIN protection, add to Home Screen, wall polish, live ticker prices and headlines | Next |
-| 5 | Remote control of the wall from your phone, and a one-command install on the Intel NUC | Planned |
-
-Until checkpoint 4 adds the PIN, anyone on your Wi-Fi who knows the address can open and change the board.
+| 3 | Two-week calendar, application types, ticker and phone remote screens; reminders on a timer | Done |
+| 4 | Reminders on your phone, PIN protection, add to Home Screen, wall polish, live ticker prices and headlines | Ready for review |
+| 5 | Remote control of the wall from your phone, and a one-command install on the Intel NUC | Next |
 
 ## Try it on any computer at home
 
@@ -55,6 +52,9 @@ Put any of these in a `.env` file next to `package.json` (or set them in the env
 | `HOST` | `0.0.0.0` | Network address to listen on (all of them, so phones can connect) |
 | `DATA_DIR` | `data` | Where the board and its backups are kept |
 | `PUBLIC_URL` | (this computer's Wi-Fi address) | Address shown on the wall for phones, e.g. a Tailscale `https://` name |
+| `BOARD_PIN` | (none) | 6 to 12 digits to lock the board with; set it with `npm run pin` |
+| `TRUST_LOCALHOST` | `1` | With a PIN, let the wall computer's own browser (at `localhost`) in without it. Set to `0` to ask there too |
+| `ALLOWED_HOSTS` | (none) | Other names the board may be opened at, comma-separated (its IP addresses, `localhost`, home-network names and the `PUBLIC_URL` name always work) |
 
 ### Backups and restoring
 
@@ -69,9 +69,9 @@ Put any of these in a `.env` file next to `package.json` (or set them in the env
 | --- | --- |
 | ![Side by side](docs/screenshots/demo-side-by-side.png) | ![Remote](docs/screenshots/demo-remote.png) |
 
-| New application: what kind? | A job application | Ticker settings | Wall remote |
-| --- | --- | --- | --- |
-| ![New application](docs/screenshots/phone-new-application.png) | ![Job application](docs/screenshots/phone-job.png) | ![Ticker settings](docs/screenshots/phone-ticker-settings.png) | ![Remote](docs/screenshots/phone-remote.png) |
+| A reminder going off | The PIN screen | New application: what kind? | A job application | Ticker settings | Wall remote |
+| --- | --- | --- | --- | --- | --- |
+| ![Reminder](docs/screenshots/phone-reminder.png) | ![PIN](docs/screenshots/phone-pin.png) | ![New application](docs/screenshots/phone-new-application.png) | ![Job application](docs/screenshots/phone-job.png) | ![Ticker settings](docs/screenshots/phone-ticker-settings.png) | ![Remote](docs/screenshots/phone-remote.png) |
 
 | Phone board | A goal | A recurring task | Editing a note | Columns and backups |
 | --- | --- | --- | --- | --- |
@@ -98,7 +98,9 @@ The API, for scripts (and later, an AI assistant):
 | Request | What it does |
 | --- | --- |
 | `GET /api/state` | The whole board, with its revision number |
-| `GET /api/events` | Live updates (server-sent events): `hello`, `change`, `ping` |
+| `GET /api/events` | Live updates (server-sent events): `hello`, `change`, `ticker`, `ping` |
+| `GET /api/session`, `POST /api/login`, `POST /api/logout` | Whether there's a PIN, and signing in (`{"pin": "…"}`) and out |
+| `GET /api/ticker` | The ticker's current prices and headlines |
 | `POST /api/notes` | Add a note: `{"laneId": "todo", "title": "Email the program officer"}` |
 | `PATCH /api/notes/:id` | Change a note's fields (`null` clears one) |
 | `DELETE /api/notes/:id`, `POST /api/notes/:id/restore` | Delete to the trash, and undo |
@@ -109,13 +111,14 @@ The API, for scripts (and later, an AI assistant):
 | `POST /api/alerts`, `DELETE /api/alerts/:id` | Pop a note's reminder up on the wall now, and take it down |
 | `GET /api/export` | Download everything, trash included |
 
-Changes must be sent as JSON (`Content-Type: application/json`).
+Changes must be sent as JSON (`Content-Type: application/json`). With a PIN, everything except the health check and signing in needs the session cookie from `POST /api/login` (scripts on the wall computer itself, at `localhost`, don't).
 
 ## Development
 
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | The board server plus a development server with live reload, at `http://localhost:5173` (add `-- --demo` for the sample board) |
+| `npm run pin` | Set the board's PIN in `.env` (`npm run pin -- --off` removes it) |
 | `npm run typecheck` | TypeScript checks for the app, the server and the tooling |
 | `npm test` | Unit tests: the data rules, the store, the API, live updates and syncing |
 | `npm run test:e2e` | Builds, then runs a real server with headless Chromium as a phone, a computer and the wall |

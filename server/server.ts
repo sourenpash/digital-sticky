@@ -3,8 +3,10 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { Board } from '../shared/types.ts';
 import { createApp } from './app.ts';
+import { Auth, loadSecret } from './auth.ts';
 import { EventHub } from './events.ts';
 import { startReminders } from './reminders.ts';
+import { TickerFeed, type Fetcher } from './ticker.ts';
 import { BoardStore } from './store.ts';
 
 export interface StartOptions {
@@ -22,6 +24,13 @@ export interface StartOptions {
   now?: () => Date;
   /** How often reminders are checked. */
   reminderTickMs?: number;
+  /** A PIN (6–12 digits) to lock the board with; null or missing leaves it open. */
+  pin?: string | null;
+  /** With a PIN: let the wall computer's own browser in without it (default true). */
+  trustLocalhost?: boolean;
+  allowedHosts?: string[];
+  /** How the ticker fetches prices and headlines (tests pass a fake); false turns it off. */
+  tickerFetch?: Fetcher | false;
 }
 
 export interface RunningServer {
@@ -39,7 +48,21 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
   const store = await BoardStore.open({ dir: options.dataDir, seed: options.seed, reset: options.reset, now: options.now, log: options.log });
   const hub = new EventHub();
   store.subscribe(rev => hub.broadcast('change', { epoch: store.epoch, rev }));
-  const app = createApp({ store, hub, buildId: options.buildId, staticDir: options.staticDir, connectUrl: options.connectUrl });
+  const auth = options.pin
+    ? new Auth({ pin: options.pin, secret: await loadSecret(options.dataDir), trustLocalhost: options.trustLocalhost ?? true, now: options.now })
+    : null;
+  const ticker = options.tickerFetch === false ? null : new TickerFeed(store, { fetcher: options.tickerFetch, log: options.log });
+  ticker?.subscribe(() => hub.broadcast('ticker', {}));
+  const app = createApp({
+    store,
+    hub,
+    buildId: options.buildId,
+    staticDir: options.staticDir,
+    connectUrl: options.connectUrl,
+    auth,
+    allowedHosts: options.allowedHosts,
+    ticker,
+  });
 
   const server = await new Promise<Server>((resolve, reject) => {
     const created: ServerType = serve({ fetch: app.fetch, port: options.port, hostname: options.host ?? '0.0.0.0' }, () => resolve(created as Server));
@@ -47,9 +70,11 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
   });
   const { port } = server.address() as AddressInfo;
   const stopReminders = startReminders(store, { tickMs: options.reminderTickMs, log: options.log });
+  ticker?.start();
 
   const closeServer = () => {
     stopReminders();
+    ticker?.stop();
     hub.closeAll();
     server.close();
     server.closeAllConnections();

@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { makeEmptyBoard } from '../shared/defaults.ts';
 import { makeSampleBoard } from '../shared/sample.ts';
-import { connectUrlFor, readConfig } from './config.ts';
+import { connectUrlFor, readConfig, type Config } from './config.ts';
 import { startServer } from './server.ts';
 
 // Starts the board server: `npm start` (or `npm run demo` for the sample board).
@@ -13,7 +13,13 @@ try {
   // No .env file: defaults and real environment variables are used.
 }
 
-const config = readConfig(process.env, process.argv.slice(2));
+let config: Config;
+try {
+  config = readConfig(process.env, process.argv.slice(2));
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+}
 const staticDir = resolve('dist/web');
 const hasApp = existsSync(join(staticDir, 'index.html'));
 
@@ -38,6 +44,9 @@ try {
     connectUrl,
     buildId: readBuildId(),
     log: message => console.log(message),
+    pin: config.pin,
+    trustLocalhost: config.trustLocalhost,
+    allowedHosts: config.allowedHosts,
   });
 } catch (error) {
   const code = (error as NodeJS.ErrnoException).code;
@@ -56,6 +65,11 @@ if (!hasApp) console.log('  The web app is not built yet: run `npm run build` fi
 console.log(`  Wall screen:      ${local}/#wall`);
 console.log(`  On this computer: ${local}`);
 if (connectUrl) console.log(`  On your phone:    ${connectUrl}  (same Wi-Fi)`);
+console.log(
+  config.pin
+    ? `  PIN:              on${config.trustLocalhost ? ' (this computer opens the wall without it)' : ''}`
+    : '  PIN:              off. Anyone on your Wi-Fi can open the board; run `npm run pin` to set one.',
+);
 console.log('');
 
 const server = running;

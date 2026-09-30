@@ -8,9 +8,10 @@ import type { Board } from '../../../shared/types.ts';
 // the server, which gets them one at a time, in order. What's on screen is always
 // "the server's latest board + the changes it hasn't confirmed yet". When the server
 // says something changed, we fetch the board again. If the connection drops, changes
-// wait in the queue and go out when it's back.
+// wait in the queue and go out when it's back. If the board has a PIN and this device
+// isn't signed in, everything waits ("locked") until it is.
 
-export type SyncStatus = 'loading' | 'connecting' | 'live' | 'offline';
+export type SyncStatus = 'loading' | 'connecting' | 'live' | 'offline' | 'locked';
 
 export interface SyncState {
   status: SyncStatus;
@@ -101,6 +102,8 @@ export class SyncEngine {
   /** The live connection worked at least once (so a drop now means "offline"). */
   private everUp = false;
   private reachable = true;
+  /** The server wants the PIN (it answered 401). */
+  private locked = false;
   private sending = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private retryMs = 0;
@@ -157,6 +160,7 @@ export class SyncEngine {
    * browser finishes even after the page is gone.
    */
   flushOnExit(): void {
+    if (this.locked) return;
     for (const item of this.pending) {
       if (item.state !== 'queued') continue;
       item.state = 'sending';
@@ -183,9 +187,19 @@ export class SyncEngine {
           this.loadAgain = false;
           const next = await this.transport.load();
           this.reachable = true;
+          const wasLocked = this.locked;
+          this.locked = false;
           this.adopt(next);
+          if (wasLocked) this.retryNow();
         } while (this.loadAgain);
-      } catch {
+      } catch (error) {
+        if (error instanceof HttpError && error.status === 401) {
+          // Signed out: nothing to retry until the PIN is entered (see unlock()).
+          this.locked = true;
+          this.reachable = true;
+          this.updateState();
+          return;
+        }
         this.reachable = false;
         this.updateState();
         this.loadRetry = setTimeout(() => void this.refresh(), 3000);
@@ -222,6 +236,14 @@ export class SyncEngine {
     this.updateState();
   }
 
+  /** Signed in: load the board and send what was waiting. */
+  unlock(): void {
+    this.locked = false;
+    this.updateState();
+    void this.refresh();
+    this.retryNow();
+  }
+
   /** Try waiting changes again now instead of after the back-off. */
   retryNow(): void {
     this.retryAt = 0;
@@ -245,7 +267,7 @@ export class SyncEngine {
   }
 
   private pump(): void {
-    if (this.sending) return;
+    if (this.sending || this.locked) return;
     const next = this.pending.find(item => item.state === 'queued');
     if (!next) return;
     const now = Date.now();
@@ -295,6 +317,13 @@ export class SyncEngine {
 
   private failed(item: Pending, error: unknown): void {
     const status = error instanceof HttpError ? error.status : 0;
+    if (status === 401) {
+      // Keep the change; it goes out once this device is signed in.
+      item.state = 'queued';
+      this.locked = true;
+      this.updateState();
+      return;
+    }
     if (status === 0 || status >= 500 || status === 408 || status === 429) {
       // Can't reach the server (or it's having a moment): keep it and try again later.
       item.state = 'queued';
@@ -333,15 +362,17 @@ export class SyncEngine {
   }
 
   private updateState(boardChanged = false): void {
-    const status: SyncStatus = !this.view
-      ? 'loading'
-      : !this.reachable
-        ? 'offline'
-        : this.streamUp
-          ? 'live'
-          : this.everUp
-            ? 'offline'
-            : 'connecting';
+    const status: SyncStatus = this.locked
+      ? 'locked'
+      : !this.view
+        ? 'loading'
+        : !this.reachable
+          ? 'offline'
+          : this.streamUp
+            ? 'live'
+            : this.everUp
+              ? 'offline'
+              : 'connecting';
     const waiting = this.pending.filter(item => item.state !== 'saved').length;
     const connectUrl = this.server?.connectUrl ?? null;
     const prev = this.state;

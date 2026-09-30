@@ -32,6 +32,10 @@ if (local) {
   engine.setStreamUp(true);
 }
 
+/** Reminders this device popped up itself ("Try it"): no need to announce them here too. */
+const firedHere = new Set<string>();
+export const poppedUpHere = (alertId: string): boolean => firedHere.has(alertId);
+
 /** Shown for the moment before the board has loaded. */
 const EMPTY: Board = { lanes: [], notes: [], goals: [], settings: DEFAULT_SETTINGS, alerts: [] };
 
@@ -261,9 +265,11 @@ export const board = {
     engine.dispatch({ type: 'lane.restore', id: lane.id, lane, notes });
   },
 
-  /** Shows a note's reminder on the wall now (the server does this at the set time from checkpoint 3). */
+  /** Shows a note's reminder on the wall now (the server does this by itself at the set time). */
   fireReminder(noteId: string): void {
-    engine.dispatch({ type: 'alert.fire', id: uid(), noteId });
+    const id = uid();
+    firedHere.add(id);
+    engine.dispatch({ type: 'alert.fire', id, noteId });
   },
 
   dismissAlert(id: string): void {

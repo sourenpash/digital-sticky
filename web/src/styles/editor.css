@@ -2315,34 +2315,74 @@
   transform: translateX(20px);
 }
 
-.alert-list {
+/* Reminders going off: at the top of every screen of the app. */
+.reminders {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  margin: 8px 0 14px;
 }
 
-.alert-row {
+.reminder {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 8px 8px 8px 12px;
-  border-radius: 10px;
+  border-radius: 14px;
   background: var(--paper-pink);
+  color: var(--paper-ink);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.reminder-bell {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  transform-origin: 50% 10%;
+  animation: bell-wiggle 2.4s ease-in-out infinite;
+}
+
+@keyframes bell-wiggle {
+  0%, 60%, 100% { transform: rotate(0); }
+  66%, 78% { transform: rotate(12deg); }
+  72%, 84% { transform: rotate(-12deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reminder-bell { animation: none; }
+}
+
+.reminder-title {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: left;
+}
+
+.reminder-time {
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.reminder .btn {
+  flex: none;
+  border-color: rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.55);
   color: var(--paper-ink);
 }
 
-.alert-row svg {
-  width: 18px;
-  height: 18px;
-}
-
-.alert-title {
-  flex: 1;
-  min-width: 0;
-  font-weight: 700;
+.reminder .icon-btn {
+  flex: none;
+  color: var(--paper-ink);
 }
 
 .lane-list {

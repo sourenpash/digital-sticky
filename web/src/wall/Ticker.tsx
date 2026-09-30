@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { timeLabel } from '../../../shared/dates.ts';
 import { formatChange, formatPrice, type TickerItem } from '../../../shared/ticker.ts';
 import type { TickerSettings } from '../../../shared/types.ts';
 import { useTicker } from '../store/ticker.ts';
@@ -27,7 +28,7 @@ function Item({ item }: { item: TickerItem }) {
 
 /** Prices and headlines sliding slowly along the bottom of the wall. */
 export function Ticker({ settings, u }: { settings: TickerSettings; u: number }) {
-  const { items, sample } = useTicker(settings);
+  const { items, sample, staleSince } = useTicker(settings);
   const runRef = useRef<HTMLSpanElement>(null);
   const [seconds, setSeconds] = useState(60);
 
@@ -46,6 +47,7 @@ export function Ticker({ settings, u }: { settings: TickerSettings; u: number })
   return (
     <div className="wall-ticker" role="marquee" aria-label="Prices and tech news">
       {sample && <span className="wall-ticker-tag">Sample</span>}
+      {staleSince && <span className="wall-ticker-tag">As of {timeLabel(new Date(staleSince))}</span>}
       <div className="wall-ticker-window">
         <div className="wall-ticker-track" style={{ '--ticker-s': `${seconds}s` } as CSSProperties}>
           <span ref={runRef} className="wall-ticker-run">

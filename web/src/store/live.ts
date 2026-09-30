@@ -9,7 +9,13 @@ const SILENT_MS = 45_000;
  * connections without telling the page, so coming back to the page, getting back
  * online, or a long silence all reconnect and fetch the board again.
  */
-export function startLiveUpdates(engine: SyncEngine, { onReloadRequest }: { onReloadRequest: () => void }, url = 'api/events'): () => void {
+export interface LiveHandlers {
+  onReloadRequest: () => void;
+  /** The server has new ticker prices or headlines. */
+  onTicker?: () => void;
+}
+
+export function startLiveUpdates(engine: SyncEngine, { onReloadRequest, onTicker }: LiveHandlers, url = 'api/events'): () => void {
   let source: EventSource | null = null;
   let lastHeard = Date.now();
   let reopenTimer: ReturnType<typeof setTimeout> | null = null;
@@ -18,11 +24,15 @@ export function startLiveUpdates(engine: SyncEngine, { onReloadRequest }: { onRe
     lastHeard = Date.now();
   };
 
+  const locked = () => engine.getState().status === 'locked';
+
   const open = () => {
     if (reopenTimer) clearTimeout(reopenTimer);
     reopenTimer = null;
     source?.close();
+    source = null;
     heard();
+    if (locked()) return; // reopened once this device is signed in
     const es = new EventSource(new URL(url, document.baseURI));
     source = es;
     es.addEventListener('hello', event => {
@@ -38,10 +48,19 @@ export function startLiveUpdates(engine: SyncEngine, { onReloadRequest }: { onRe
       heard();
       onReloadRequest();
     });
+    es.addEventListener('ticker', () => {
+      heard();
+      onTicker?.();
+    });
     es.onerror = () => {
       engine.setStreamUp(false);
-      // The browser retries by itself, unless the server answered with an error page.
-      if (es.readyState === EventSource.CLOSED && source === es) reopenTimer = setTimeout(open, 3000);
+      // The browser retries by itself, unless the server answered with an error (a
+      // restart, or "enter the PIN"). Ask the server which, then try again.
+      if (es.readyState === EventSource.CLOSED && source === es) {
+        void engine.refresh().then(() => {
+          if (source === es && !locked()) reopenTimer = setTimeout(open, 3000);
+        });
+      }
     };
   };
 
@@ -52,8 +71,16 @@ export function startLiveUpdates(engine: SyncEngine, { onReloadRequest }: { onRe
   };
 
   const watchdog = setInterval(() => {
-    if (Date.now() - lastHeard > SILENT_MS) reconnect();
+    if (!locked() && Date.now() - lastHeard > SILENT_MS) reconnect();
   }, 10_000);
+
+  // Signed in (here or in another tab of this browser): open the live connection again.
+  let wasLocked = locked();
+  const unsubscribe = engine.subscribe(() => {
+    const now = locked();
+    if (wasLocked && !now) open();
+    wasLocked = now;
+  });
 
   const onVisibility = () => {
     if (document.visibilityState === 'visible') reconnect();
@@ -73,6 +100,7 @@ export function startLiveUpdates(engine: SyncEngine, { onReloadRequest }: { onRe
   open();
 
   return () => {
+    unsubscribe();
     clearInterval(watchdog);
     if (reopenTimer) clearTimeout(reopenTimer);
     source?.close();

@@ -4,6 +4,7 @@ import { lanesInOrder } from '../../../shared/board.ts';
 import { CRYPTO_SYMBOL, MAX_CRYPTO, MAX_NEWS, MAX_STOCKS, NEWS_SOURCES, STOCK_SYMBOL, newsTag } from '../../../shared/ticker.ts';
 import { LANE_KINDS, NOTE_COLORS, type Board, type Lane, type LaneKind, type NightMode, type NightStyle, type Settings, type TickerSettings } from '../../../shared/types.ts';
 import { board as store, reloadWall, useSync } from '../store/board.ts';
+import { logout, useSession } from '../store/session.ts';
 import { showToast } from '../store/toasts.ts';
 import { Wall } from '../wall/Wall.tsx';
 import { normalizeUrl } from './NoteEditor.tsx';
@@ -23,6 +24,14 @@ const NIGHT_MODES: Array<{ value: NightMode; label: string }> = [
   { value: 'auto', label: 'On a schedule' },
   { value: 'on', label: 'Always' },
   { value: 'off', label: 'Never' },
+];
+
+const STAY_UP = [
+  { minutes: 15, label: '15 min' },
+  { minutes: 30, label: '30 min' },
+  { minutes: 60, label: '1 hour' },
+  { minutes: 120, label: '2 hours' },
+  { minutes: 240, label: '4 hours' },
 ];
 
 const NIGHT_STYLES: Array<{ value: NightStyle; label: string; hint: string }> = [
@@ -161,7 +170,7 @@ function TickerSection({ ticker }: { ticker: TickerSettings }) {
           <p className="set-note">
             {__DEMO_BUILD__
               ? 'The preview shows made-up prices and headlines.'
-              : 'Made-up prices and headlines for now; live ones come in the next step (free sources, stock prices about 15 minutes behind).'}
+              : 'The wall computer fetches prices every 5 minutes (crypto from CoinGecko, stocks from Yahoo Finance, which can be about 15 minutes behind) and headlines from each site’s feed.'}
           </p>
         </>
       )}
@@ -273,6 +282,49 @@ function ColumnsSection({ board }: { board: Board }) {
   );
 }
 
+function PinSection({ go }: { go: (token: string) => void }) {
+  const session = useSession();
+  let body;
+  if (__DEMO_BUILD__) {
+    body = (
+      <>
+        <p className="set-note">A PIN is set. Each phone or computer asks for it once.</p>
+        <button type="button" className="btn btn-sm btn-ghost" onClick={() => go('login')}>
+          See the PIN screen
+        </button>
+      </>
+    );
+  } else if (!session) {
+    body = <p className="set-note">Checking…</p>;
+  } else if (!session.pinSet) {
+    body = (
+      <p className="set-note">
+        No PIN is set, so anyone on your Wi-Fi who knows the address can open the board. To set one, run <code>npm run pin</code> on the wall computer and
+        restart the board.
+      </p>
+    );
+  } else if (session.wallComputer) {
+    body = <p className="set-note">The board is locked with a PIN. This is the wall computer, so it doesn’t need it.</p>;
+  } else {
+    body = (
+      <>
+        <p className="set-note">The board is locked with a PIN, and this device is signed in. It stays signed in until you sign out or the PIN changes.</p>
+        <button type="button" className="btn btn-sm" onClick={() => void logout()}>
+          Sign out this device
+        </button>
+      </>
+    );
+  }
+  return (
+    <section className="set-group">
+      <h3>
+        <Lock aria-hidden="true" /> PIN
+      </h3>
+      {body}
+    </section>
+  );
+}
+
 export function DisplayTab({ board, now, desktop, go }: { board: Board; now: Date; desktop: boolean; go: (token: string) => void }) {
   const { night, wall } = board.settings;
   const { connectUrl } = useSync();
@@ -323,21 +375,17 @@ export function DisplayTab({ board, now, desktop, go }: { board: Board; now: Dat
           <h3>
             <Bell aria-hidden="true" /> Reminders
           </h3>
-          {board.alerts.length === 0 ? (
-            <p className="set-note">No reminders showing on the wall right now.</p>
-          ) : (
-            <ul className="alert-list">
-              {board.alerts.map(alert => (
-                <li key={alert.id} className="alert-row">
-                  <Bell aria-hidden="true" />
-                  <span className="alert-title">{alert.title}</span>
-                  <button type="button" className="btn btn-sm" onClick={() => store.dismissAlert(alert.id)}>
-                    Dismiss
-                  </button>
-                </li>
+          <p className="set-note">A reminder pops up on the wall at its time, and at the top of this app, with Done and Dismiss.</p>
+          <div className="sym-field">
+            <span className="field-label" id="stay-up">Reminders stay up for</span>
+            <div className="seg-group" role="radiogroup" aria-labelledby="stay-up">
+              {STAY_UP.map(option => (
+                <button key={option.minutes} type="button" role="radio" aria-checked={wall.alertMinutes === option.minutes} className={`seg${wall.alertMinutes === option.minutes ? ' is-on' : ''}`} onClick={() => setWall({ alertMinutes: option.minutes })}>
+                  {option.label}
+                </button>
               ))}
-            </ul>
-          )}
+            </div>
+          </div>
           <Switch id="chime" checked={wall.chime} label="Chime when a reminder pops up (never at night)" onChange={chime => setWall({ chime })} />
           {nextReminder && (
             <button type="button" className="btn btn-sm btn-ghost" onClick={() => store.fireReminder(nextReminder.id)}>
@@ -359,6 +407,10 @@ export function DisplayTab({ board, now, desktop, go }: { board: Board; now: Dat
             ) : (
               'The wall computer didn’t find its Wi-Fi address, so the code is hidden.'
             )}
+          </p>
+          <p className="set-note">
+            <strong>Add it to your Home Screen:</strong> open the address in Safari, tap Share, then Add to Home Screen. It opens like an app. If the board has a PIN,
+            enter it once there too.
           </p>
         </section>
 
@@ -392,21 +444,7 @@ export function DisplayTab({ board, now, desktop, go }: { board: Board; now: Dat
           )}
         </section>
 
-        <section className="set-group">
-          <h3>
-            <Lock aria-hidden="true" /> PIN
-          </h3>
-          {__DEMO_BUILD__ ? (
-            <>
-              <p className="set-note">A PIN is set. Each phone or computer asks for it once.</p>
-              <button type="button" className="btn btn-sm btn-ghost" onClick={() => go('login')}>
-                See the PIN screen
-              </button>
-            </>
-          ) : (
-            <p className="set-note">Coming in the next step: a PIN, so only your phones and computers can change the board.</p>
-          )}
-        </section>
+        <PinSection go={go} />
       </div>
     </div>
   );

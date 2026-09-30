@@ -1,13 +1,14 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { CalendarDays, LayoutGrid, Monitor, Plus, SearchCheck } from 'lucide-react';
 import { unverifiedCount } from '../../../shared/board.ts';
 import { applyPatch } from '../../../shared/ops.ts';
 import { repeatStatus } from '../../../shared/recurring.ts';
-import type { Goal, LaneKind, Note } from '../../../shared/types.ts';
+import type { Board, Goal, LaneKind, Note } from '../../../shared/types.ts';
 import { currentTime, useNow } from '../lib/now.ts';
 import type { EditorTab } from '../lib/route.ts';
-import { board, draftGoal, draftNote, laneChange, useBoard, useSync } from '../store/board.ts';
+import { board, draftGoal, draftNote, laneChange, poppedUpHere, useBoard, useSync } from '../store/board.ts';
 import { showToast } from '../store/toasts.ts';
+import { ActiveReminders } from './ActiveReminders.tsx';
 import { AddMenu } from './AddMenu.tsx';
 import { BoardTab } from './BoardTab.tsx';
 import { CalendarTab } from './CalendarTab.tsx';
@@ -77,10 +78,30 @@ function LiveBadge() {
   );
 }
 
+/** A toast when a reminder goes off while this screen is open (not for old ones, or ones tapped here). */
+function useReminderToasts(alerts: Board['alerts'], loaded: boolean, now: Date): void {
+  const seen = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!loaded) return;
+    const first = seen.current === null;
+    const known = seen.current ?? new Set<string>();
+    for (const alert of alerts) {
+      if (known.has(alert.id) || poppedUpHere(alert.id)) continue;
+      const age = now.getTime() - Date.parse(alert.firedAt);
+      if (!first || age < 2 * 60_000) {
+        showToast({ text: `Reminder: ${alert.title}`, actionLabel: 'Dismiss', action: () => board.dismissAlert(alert.id) }, 12_000);
+      }
+    }
+    seen.current = new Set(alerts.map(alert => alert.id));
+  }, [alerts, loaded, now]);
+}
+
 /** The editing app for phones and computers. Below 760px wide it uses the phone layout. */
 export function EditorApp({ route, go }: { route: EditorRoute; go: (token: string) => void }) {
   const data = useBoard();
   const now = useNow();
+  const { status } = useSync();
+  useReminderToasts(data.alerts, status !== 'loading' && status !== 'locked', now);
   const { ref, width } = useWidth<HTMLDivElement>();
   const desktop = width >= 760;
   const [adding, setAdding] = useState(false);
@@ -309,7 +330,10 @@ export function EditorApp({ route, go }: { route: EditorRoute; go: (token: strin
               <LiveBadge />
             </div>
           </aside>
-          <main className="ed-main">{content}</main>
+          <main className="ed-main">
+            <ActiveReminders board={data} onOpen={openNote} />
+            {content}
+          </main>
           {editor && <aside className="ed-panel" aria-label={editorLabel}>{editor}</aside>}
         </>
       ) : (
@@ -318,7 +342,10 @@ export function EditorApp({ route, go }: { route: EditorRoute; go: (token: strin
             <Brand />
             <LiveBadge />
           </header>
-          <main className="ed-scroll">{content}</main>
+          <main className="ed-scroll">
+            <ActiveReminders board={data} onOpen={openNote} />
+            {content}
+          </main>
           <nav className="ed-tabbar" aria-label="Sections">
             {TABS.slice(0, 2).map(({ tab: t, label, icon: Icon }) => (
               <button key={t} type="button" className={`ed-tab${tab === t ? ' is-on' : ''}`} aria-current={tab === t ? 'page' : undefined} onClick={() => go(t)}>

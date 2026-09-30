@@ -39,7 +39,7 @@ export function DemoSplit({ board, now, connectUrl }: { board: Board; now: Date;
         </div>
         <figure className="demo-wall">
           <div className="monitor">
-            <Wall board={board} now={now} connectUrl={connectUrl} cursor />
+            <Wall board={board} now={now} connectUrl={connectUrl} sound cursor />
           </div>
           <figcaption>The bedroom wall screen, scaled down</figcaption>
         </figure>

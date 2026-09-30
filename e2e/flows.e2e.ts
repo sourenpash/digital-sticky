@@ -128,7 +128,8 @@ describe('everyday flows', () => {
 
     await phone.getByLabel('New stocks symbol').fill('tsla');
     await phone.getByRole('button', { name: 'Add to stocks' }).click();
-    await expect.poll(count(wall.locator('.wall-ticker .tk-sym', { hasText: 'TSLA' }))).toBeGreaterThan(0);
+    // The wall computer fetches the new price a couple of seconds after the change.
+    await expect.poll(count(wall.locator('.wall-ticker .tk-sym', { hasText: 'TSLA' })), { timeout: 10_000 }).toBeGreaterThan(0);
     await phone.getByRole('button', { name: 'Remove BTC' }).click();
     await expect.poll(count(wall.locator('.wall-ticker .tk-sym', { hasText: 'BTC' }))).toBe(0);
     await phone.getByRole('switch', { name: /Show prices and tech news/ }).click();

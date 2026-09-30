@@ -36,7 +36,9 @@ export default defineConfig(({ command, mode }) => {
       port: 5173,
       host: true,
       // `npm run dev` runs the board server on 3000 next to this dev server.
-      proxy: { '/api': { target: 'http://localhost:3000' } },
+      // xfwd marks proxied requests, so a phone using this dev server isn't mistaken for
+      // the wall computer (which gets in without the PIN).
+      proxy: { '/api': { target: 'http://localhost:3000', xfwd: true } },
     },
   };
 });

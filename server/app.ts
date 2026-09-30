@@ -5,7 +5,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { compress } from 'hono/compress';
 import { secureHeaders } from 'hono/secure-headers';
 import { streamSSE } from 'hono/streaming';
-import type { z } from 'zod';
+import { z } from 'zod';
 import type { StateResponse } from '../shared/api.ts';
 import {
   completionsChangeSchema,
@@ -21,7 +21,10 @@ import {
   settingsPatchSchema,
 } from '../shared/schema.ts';
 import type { Goal, Lane, Note } from '../shared/types.ts';
+import type { Auth } from './auth.ts';
 import type { EventHub } from './events.ts';
+import { hostAllowed } from './hosts.ts';
+import type { TickerFeed } from './ticker.ts';
 import { newId, StoreError, type BoardStore } from './store.ts';
 
 export interface AppOptions {
@@ -33,7 +36,18 @@ export interface AppOptions {
   staticDir: string | null;
   /** Address phones can open, shown on the wall's "Connect your phone" card. */
   connectUrl: string | null;
+  /** Set when there's a PIN: everything but signing in needs it. */
+  auth?: Auth | null;
+  /** Names to answer to besides this computer's own and home-network ones. */
+  allowedHosts?: readonly string[];
+  /** Live prices and headlines for the wall's ticker. */
+  ticker?: TickerFeed | null;
 }
+
+/** Open without the PIN: checking the server is up, and signing in and out. */
+const OPEN_PATHS = new Set(['/api/health', '/api/session', '/api/login', '/api/logout']);
+const loginSchema = z.object({ pin: z.string().max(64) });
+const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /** Every change answers with the revision that includes it (and the server run it belongs to). */
 function changed(c: Context, store: BoardStore, rev: number, extra: Record<string, unknown> = {}, status: 200 | 201 = 200) {
@@ -56,10 +70,17 @@ function isJson(contentType: string | undefined): boolean {
   return /^application\/json\b/i.test(contentType ?? '');
 }
 
-export function createApp({ store, hub, buildId, staticDir, connectUrl }: AppOptions): Hono {
+export function createApp({ store, hub, buildId, staticDir, connectUrl, auth = null, allowedHosts = [], ticker = null }: AppOptions): Hono {
   const app = new Hono();
   const stamp = () => store.now().toISOString();
 
+  app.use(async (c, next) => {
+    const host = new URL(c.req.url).hostname;
+    if (!hostAllowed(host, allowedHosts)) {
+      return c.text(`This board doesn't answer to "${host}". To use that name, add it to ALLOWED_HOSTS in the .env file on the wall computer.`, 421);
+    }
+    await next();
+  });
   app.use(secureHeaders({ referrerPolicy: 'no-referrer' }));
   app.use(compress());
 
@@ -81,12 +102,62 @@ export function createApp({ store, hub, buildId, staticDir, connectUrl }: AppOpt
     await next();
   });
 
+  if (auth) {
+    api.use(async (c, next) => {
+      if (OPEN_PATHS.has(c.req.path) || auth.isWallComputer(c)) return next();
+      const session = await auth.session(c);
+      if (!session.signedIn) return c.json({ error: 'Enter the PIN to open the board', locked: true }, 401);
+      // Keep devices that are used signed in (only on plain requests; a live stream can't set cookies).
+      if (session.renew && c.req.path === '/api/state') await auth.signIn(c);
+      return next();
+    });
+  }
+
   api.get('/health', c => c.json({ ok: true, rev: store.rev, buildId }));
+
+  api.get('/session', async c => {
+    c.header('Cache-Control', 'no-store');
+    if (!auth) return c.json({ pinSet: false, signedIn: true, wallComputer: false });
+    const wallComputer = auth.isWallComputer(c);
+    const session = await auth.session(c);
+    if (session.renew) await auth.signIn(c);
+    return c.json({ pinSet: true, signedIn: wallComputer || session.signedIn, wallComputer });
+  });
+
+  api.post('/login', async c => {
+    if (!auth) return c.json({ ok: true });
+    const { pin } = await readBody(c, loginSchema);
+    const client = auth.clientKey(c);
+    const now = store.now().getTime();
+    const wait = auth.limiter.waitFor(client, now);
+    if (wait > 0) {
+      c.header('Retry-After', String(wait));
+      return c.json({ error: 'Too many wrong PINs. Try again later.', retryAfter: wait }, 429);
+    }
+    auth.limiter.tried(client, now);
+    if (!auth.checkPin(pin)) {
+      await pause(300);
+      return c.json({ error: 'That PIN isn’t right' }, 401);
+    }
+    auth.limiter.succeeded(client, now);
+    await auth.signIn(c);
+    return c.json({ ok: true });
+  });
+
+  api.post('/logout', c => {
+    auth?.signOut(c);
+    return c.json({ ok: true });
+  });
 
   api.get('/state', c => {
     c.header('Cache-Control', 'no-store');
     const { epoch, rev, board } = store.snapshot();
     return c.json({ epoch, rev, board, connectUrl } satisfies StateResponse);
+  });
+
+  api.get('/ticker', c => {
+    c.header('Cache-Control', 'no-store');
+    return c.json(ticker?.snapshot() ?? { items: [], updatedAt: null, stale: false });
   });
 
   api.get('/events', c => {

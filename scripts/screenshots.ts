@@ -9,6 +9,7 @@ import type { StateResponse } from '../shared/api.ts';
 import { makeEmptyBoard } from '../shared/defaults.ts';
 import { makeSampleBoard, SAMPLE_CONNECT_URL } from '../shared/sample.ts';
 import { startServer, type RunningServer } from '../server/server.ts';
+import { fakeTickerFetch } from '../e2e/tickerFixtures.ts';
 
 const OUT = 'docs/screenshots'; // curated shots referenced by the README
 const REVIEW = '.screenshots'; // everything else (git-ignored)
@@ -34,6 +35,8 @@ interface Shot {
   act?: (page: Page, server: RunningServer) => Promise<void>;
   /** Commit this one to docs/screenshots. */
   keep?: boolean;
+  /** Lock the board with a PIN, and open the page as a phone on the Wi-Fi (not the wall computer). */
+  pin?: boolean;
 }
 
 const phone = { width: 390, height: 844 };
@@ -100,6 +103,8 @@ const shots: Shot[] = [
     },
   },
   { keep: true, name: 'phone-board', hash: 'board', ...onPhone },
+  { keep: true, name: 'phone-pin', hash: 'board', ...onPhone, pin: true },
+  { keep: true, name: 'phone-reminder', hash: 'board', ...onPhone, setup: popUpReminder },
   { name: 'phone-board-dark', hash: 'board', ...onPhone, colorScheme: 'dark' },
   { name: 'phone-first-day', hash: 'board', ...onPhone, empty: true },
   { keep: true, name: 'phone-note', hash: 'board', ...onPhone, act: openNsf },
@@ -195,6 +200,8 @@ try {
       connectUrl: SAMPLE_CONNECT_URL,
       buildId,
       now: () => new Date(Date.now() + offset),
+      tickerFetch: fakeTickerFetch,
+      pin: shot.pin ? '482915' : null,
     });
     const base = `http://127.0.0.1:${PORT}`;
     const api: Api = {
@@ -210,11 +217,12 @@ try {
       isMobile: shot.mobile ?? false,
       hasTouch: shot.mobile ?? false,
       colorScheme: shot.colorScheme ?? 'light',
+      extraHTTPHeaders: shot.pin ? { 'X-Forwarded-For': '203.0.113.7' } : undefined,
     });
     const page = await context.newPage();
     page.on('pageerror', err => console.error(`[${shot.name}] page error:`, err.message));
     await page.goto(`${base}/?now=${NOW}#${shot.hash}`);
-    await page.locator('.wall, .editor, .demo, .remote').first().waitFor();
+    await page.locator('.wall, .editor, .demo, .remote, .login').first().waitFor();
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(700);
     if (shot.act) await shot.act(page, server);
