@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import type { Board } from '../shared/types.ts';
 import { createApp } from './app.ts';
 import { EventHub } from './events.ts';
+import { startReminders } from './reminders.ts';
 import { BoardStore } from './store.ts';
 
 export interface StartOptions {
@@ -17,6 +18,10 @@ export interface StartOptions {
   connectUrl: string | null;
   buildId: string;
   log?: (message: string) => void;
+  /** The server's clock (tests start it at a fixed time). */
+  now?: () => Date;
+  /** How often reminders are checked. */
+  reminderTickMs?: number;
 }
 
 export interface RunningServer {
@@ -31,7 +36,7 @@ export interface RunningServer {
 
 /** Opens the board and starts serving the app, the API and live updates. */
 export async function startServer(options: StartOptions): Promise<RunningServer> {
-  const store = await BoardStore.open({ dir: options.dataDir, seed: options.seed, reset: options.reset, log: options.log });
+  const store = await BoardStore.open({ dir: options.dataDir, seed: options.seed, reset: options.reset, now: options.now, log: options.log });
   const hub = new EventHub();
   store.subscribe(rev => hub.broadcast('change', { epoch: store.epoch, rev }));
   const app = createApp({ store, hub, buildId: options.buildId, staticDir: options.staticDir, connectUrl: options.connectUrl });
@@ -41,8 +46,10 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     created.once('error', reject);
   });
   const { port } = server.address() as AddressInfo;
+  const stopReminders = startReminders(store, { tickMs: options.reminderTickMs, log: options.log });
 
   const closeServer = () => {
+    stopReminders();
     hub.closeAll();
     server.close();
     server.closeAllConnections();

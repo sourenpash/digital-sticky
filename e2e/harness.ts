@@ -30,10 +30,14 @@ export class Harness {
   private readonly seed: (now: Date) => Board;
   /** Added to page addresses, e.g. `?now=…` for sample-board dates. */
   private readonly query: string;
+  /** Where the server's clock starts (it then runs normally), to match `?now=` pages. */
+  private readonly startAt: string | undefined;
+  private offset = 0;
 
-  constructor(seed: (now: Date) => Board, query = '') {
+  constructor(seed: (now: Date) => Board, { query = '', now }: { query?: string; now?: string } = {}) {
     this.seed = seed;
     this.query = query;
+    this.startAt = now;
   }
 
   async launch(): Promise<void> {
@@ -49,6 +53,7 @@ export class Harness {
     this.dataDir = await mkdtemp(join(tmpdir(), 'sticky-e2e-'));
     this.port = 0;
     this.pageErrors = [];
+    this.offset = this.startAt ? Date.parse(this.startAt) - Date.now() : 0;
     await this.start();
   }
 
@@ -70,6 +75,8 @@ export class Harness {
       staticDir,
       connectUrl: null,
       buildId,
+      now: () => new Date(Date.now() + this.offset),
+      reminderTickMs: 250,
     });
     this.port = this.server.port;
   }

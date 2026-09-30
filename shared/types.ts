@@ -57,6 +57,8 @@ export interface Note {
   due?: string;
   /** ISO date-time when the wall should show a reminder. */
   remindAt?: string;
+  /** The `remindAt` the server has already shown (or skipped). Moving the reminder arms it again. */
+  remindedFor?: string;
   stage?: Stage;
   funder?: string;
   amount?: string;

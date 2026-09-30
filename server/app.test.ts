@@ -165,7 +165,8 @@ describe('API', () => {
     const alert = (await state()).board.alerts[0];
     expect(alert).toMatchObject({ noteId: id, title: 'Buy stamps' });
     expect((await send('DELETE', `/api/alerts/${alert?.id}`)).status).toBe(200);
-    expect((await send('DELETE', `/api/alerts/${alert?.id}`)).status).toBe(404);
+    // Already gone (it timed out, or another phone dismissed it first) is fine too.
+    expect((await send('DELETE', `/api/alerts/${alert?.id}`)).status).toBe(200);
   });
 
   it('downloads a full backup, trash included', async () => {

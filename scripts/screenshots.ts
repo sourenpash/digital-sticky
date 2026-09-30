@@ -142,6 +142,8 @@ try {
   for (const shot of shots) {
     if (filter && !shot.name.includes(filter)) continue;
     const dataDir = await mkdtemp(join(tmpdir(), 'sticky-shot-'));
+    // The server's clock starts at NOW too, so reminders go off as they would that evening.
+    const offset = Date.parse(NOW) - Date.now();
     const server = await startServer({
       port: PORT,
       host: '127.0.0.1',
@@ -150,6 +152,7 @@ try {
       staticDir,
       connectUrl: SAMPLE_CONNECT_URL,
       buildId,
+      now: () => new Date(Date.now() + offset),
     });
     const base = `http://127.0.0.1:${PORT}`;
     const api: Api = {

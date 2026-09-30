@@ -59,6 +59,7 @@ export const noteSchema = z.object({
   color: noteColorSchema.optional(),
   due: when.optional(),
   remindAt: dateTime.optional(),
+  remindedFor: dateTime.optional(),
   stage: z.enum(STAGES).optional(),
   funder: funder.optional(),
   amount: amount.optional(),
@@ -74,7 +75,7 @@ export const noteSchema = z.object({
 });
 
 /** POST /api/notes. Only the column and title are required; the rest has defaults. */
-export const newNoteSchema = noteSchema.extend({
+export const newNoteSchema = noteSchema.omit({ remindedFor: true }).extend({
   id: id.optional(),
   body: body.default(''),
   checklist: checklist.default([]),
@@ -167,6 +168,9 @@ export const settingsPatchSchema = z.object({
   wall: settingsSchema.shape.wall.partial().optional(),
 });
 
+/** Most reminders that can be showing at once. */
+export const MAX_ALERTS = 200;
+
 export const alertSchema = z.object({ id, noteId: id, title, firedAt: dateTime });
 export const newAlertSchema = z.object({ id: id.optional(), noteId: id });
 
@@ -175,7 +179,7 @@ export const boardSchema = z.object({
   notes: z.array(noteSchema).max(5000),
   goals: z.array(goalSchema).max(100),
   settings: settingsSchema,
-  alerts: z.array(alertSchema).max(200),
+  alerts: z.array(alertSchema).max(MAX_ALERTS),
 });
 
 /** Deleted things wait here for 30 days so Undo works, even from another device. */

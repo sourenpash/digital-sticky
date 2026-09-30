@@ -7,7 +7,7 @@ import { Harness } from './harness.ts';
 // so every change goes through the server before the wall shows it.
 
 const NOW = '2026-09-30T19:42:00'; // a Wednesday evening, matching the sample's dates
-const h = new Harness(() => makeSampleBoard(new Date(NOW)), `?now=${NOW}`);
+const h = new Harness(() => makeSampleBoard(new Date(NOW)), { query: `?now=${NOW}`, now: NOW });
 
 const text = (locator: Locator) => () => locator.first().innerText().catch(() => '');
 const count = (locator: Locator) => () => locator.count();

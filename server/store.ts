@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { format } from 'date-fns';
 import { lanesInOrder } from '../shared/board.ts';
-import { applyOp, type Op } from '../shared/ops.ts';
+import { applyOp, type ServerOp } from '../shared/ops.ts';
 import { boardSchema, describeIssues, savedFileSchema, type SavedFile, type Trash } from '../shared/schema.ts';
 import type { Board, Goal, Lane, Note } from '../shared/types.ts';
 
@@ -136,11 +136,11 @@ export class BoardStore {
    * Checks and applies one change, and returns the new revision. Throws a StoreError
    * (400 / 404 / 409) when the change can't be made.
    */
-  apply(op: Op): number {
+  apply(op: ServerOp): number {
     const now = this.now();
     const stamp = now.toISOString();
     const { board, trash } = this.file;
-    let change: Op = op;
+    let change: ServerOp = op;
     let nextTrash: Trash = trash;
 
     switch (op.type) {
@@ -239,12 +239,13 @@ export class BoardStore {
         if (board.alerts.some(alert => alert.id === op.id)) throw new StoreError(409, 'That reminder is already showing');
         break;
 
-      case 'alert.dismiss':
-        if (!board.alerts.some(alert => alert.id === op.id)) throw new StoreError(404, 'That reminder is already gone');
+      case 'alert.dismiss': // already gone (it timed out, or another phone got there first) is fine
+      case 'reminders.tick':
         break;
     }
 
     const next = applyOp(board, change, now);
+    if (next === board && nextTrash === trash) return this.rev; // nothing to change
     // Belt and braces: never keep (or save) a board that doesn't pass the schema.
     const checked = boardSchema.safeParse(next);
     if (!checked.success) throw new StoreError(400, describeIssues(checked.error));

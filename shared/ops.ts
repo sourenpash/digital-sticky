@@ -10,7 +10,7 @@ type OptionalKeys<T> = { [K in keyof T]-?: {} extends Pick<T, K> ? K : never }[k
 /** Changed fields only. Optional fields can be cleared with `null` (JSON has no `undefined`). */
 export type Patch<T> = { [K in keyof T]?: K extends OptionalKeys<T> ? T[K] | null : T[K] };
 
-export type NotePatch = Patch<Omit<Note, 'id' | 'createdAt' | 'updatedAt'>>;
+export type NotePatch = Patch<Omit<Note, 'id' | 'createdAt' | 'updatedAt' | 'remindedFor'>>;
 export type LanePatch = Patch<Pick<Lane, 'title' | 'color' | 'kind'>>;
 export type GoalPatch = Patch<Omit<Goal, 'id' | 'createdAt'>>;
 export interface SettingsPatch {
@@ -39,6 +39,21 @@ export type Op =
   | { type: 'settings.patch'; patch: SettingsPatch }
   | { type: 'alert.fire'; id: string; noteId: string }
   | { type: 'alert.dismiss'; id: string };
+
+/** A reminder whose time has come: marked as handled, and shown on the wall if `show`. */
+export interface ReminderFire {
+  noteId: string;
+  /** The reminder time the server saw; skipped if the note's reminder has moved since. */
+  remindAt: string;
+  alertId: string;
+  show: boolean;
+}
+
+/**
+ * Changes only the server makes. Every 10 seconds it shows reminders that are due and
+ * takes down ones that have been up long enough, as one change.
+ */
+export type ServerOp = Op | { type: 'reminders.tick'; fire: ReminderFire[]; expire: string[] };
 
 /** Applies a patch: `null` (or `undefined`) removes a field, anything else replaces it. */
 export function applyPatch<T extends object>(target: T, patch: object): T {
@@ -78,16 +93,20 @@ function withNote(board: Board, id: string, change: (note: Note) => Note): Board
   return found ? { ...board, notes } : board;
 }
 
-function withoutAlertsFor(alerts: Alert[], noteIds: Set<string>): Alert[] {
-  const kept = alerts.filter(alert => !noteIds.has(alert.noteId));
+function withoutAlerts(alerts: Alert[], drop: (alert: Alert) => boolean): Alert[] {
+  const kept = alerts.filter(alert => !drop(alert));
   return kept.length === alerts.length ? alerts : kept;
+}
+
+function withoutAlertsFor(alerts: Alert[], noteIds: Set<string>): Alert[] {
+  return withoutAlerts(alerts, alert => noteIds.has(alert.noteId));
 }
 
 function definedOnly<T extends object>(patch: Partial<T> | undefined): Partial<T> {
   return Object.fromEntries(Object.entries(patch ?? {}).filter(([, value]) => value !== undefined && value !== null)) as Partial<T>;
 }
 
-export function applyOp(board: Board, op: Op, now: Date): Board {
+export function applyOp(board: Board, op: ServerOp, now: Date): Board {
   const stamp = now.toISOString();
   switch (op.type) {
     case 'note.add':
@@ -189,5 +208,21 @@ export function applyOp(board: Board, op: Op, now: Date): Board {
     case 'alert.dismiss':
       if (!board.alerts.some(alert => alert.id === op.id)) return board;
       return { ...board, alerts: board.alerts.filter(alert => alert.id !== op.id) };
+
+    case 'reminders.tick': {
+      const expired = new Set(op.expire);
+      let alerts = withoutAlerts(board.alerts, alert => expired.has(alert.id));
+      let notes = board.notes;
+      for (const item of op.fire) {
+        const note = notes.find(n => n.id === item.noteId);
+        if (!note?.remindAt || Date.parse(note.remindAt) !== Date.parse(item.remindAt)) continue;
+        notes = notes.map(n => (n === note ? { ...note, remindedFor: item.remindAt } : n));
+        if (item.show && !note.done) {
+          // A reminder already up for this note (from "Try it") makes way, so this one gets its full time.
+          alerts = [...withoutAlertsFor(alerts, new Set([note.id])), { id: item.alertId, noteId: note.id, title: note.title, firedAt: stamp }];
+        }
+      }
+      return notes === board.notes && alerts === board.alerts ? board : { ...board, notes, alerts };
+    }
   }
 }
