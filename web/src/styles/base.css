@@ -62,3 +62,52 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Loading screen, before the board arrives from the server */
+.boot {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  height: 100%;
+  padding: 24px;
+  text-align: center;
+}
+
+.boot .brand-mark {
+  width: 36px;
+  height: 36px;
+  animation: boot-bob 1.6s ease-in-out infinite;
+}
+
+.boot-title {
+  margin: 8px 0 0;
+  font-weight: 700;
+}
+
+.boot-hint {
+  max-width: 34ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.boot.is-wall {
+  position: fixed;
+  inset: 0;
+  background: #1b1916;
+  color: #f4efe6;
+  font-size: clamp(16px, 2vw, 40px);
+  cursor: none;
+}
+
+.boot.is-wall .boot-hint {
+  color: #b9b2a6;
+  font-size: 0.8em;
+}
+
+@keyframes boot-bob {
+  50% {
+    transform: rotate(6deg) translateY(-4px);
+  }
+}

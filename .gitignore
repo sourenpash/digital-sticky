@@ -1,7 +1,8 @@
 node_modules/
 dist/
-data/
-data-demo/
+# Board data lives in these folders at the repo root (not web/src/…).
+/data/
+/data-demo/
 .env
 *.log
 .DS_Store

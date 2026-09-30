@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type DragEvent } from 'react';
 import { Grid2x2, Grid3x3, Plus, Search, Target, X } from 'lucide-react';
 import { compareNotes, lanesInOrder } from '../../../shared/board.ts';
 import type { Board, Lane, Note } from '../../../shared/types.ts';
@@ -12,6 +12,9 @@ function matches(note: Note, query: string): boolean {
     .filter(Boolean)
     .some(text => text!.toLowerCase().includes(q));
 }
+
+/** Dragging a square between columns (computers only; phones use the column picker in the note). */
+const DRAG_TYPE = 'application/x-sticky-note';
 
 type SquareSize = 'small' | 'large';
 const SIZE_KEY = 'digital-sticky:square-size';
@@ -42,13 +45,16 @@ interface Props {
   onOpen: (id: string) => void;
   onOpenGoal: (id: string) => void;
   onNewGoal: () => void;
+  onMove: (noteId: string, laneId: string) => void;
 }
 
-export function BoardTab({ board, now, desktop, selectedId, selectedGoalId, onOpen, onOpenGoal, onNewGoal }: Props) {
+export function BoardTab({ board, now, desktop, selectedId, selectedGoalId, onOpen, onOpenGoal, onNewGoal, onMove }: Props) {
   const [query, setQuery] = useState('');
   const [laneFilter, setLaneFilter] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
   const [size, setSize] = useState<SquareSize>(readSize);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [dropLane, setDropLane] = useState<string | null>(null);
   const lanes = lanesInOrder(board.lanes);
   const notesIn = (lane: Lane) =>
     board.notes
@@ -60,6 +66,31 @@ export function BoardTab({ board, now, desktop, selectedId, selectedGoalId, onOp
     setSize(next);
     saveSize(next);
   };
+
+  const endDrag = () => {
+    setDragging(null);
+    setDropLane(null);
+  };
+  const dropProps = (lane: Lane) =>
+    desktop
+      ? {
+          onDragOver: (e: DragEvent) => {
+            if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            setDropLane(lane.id);
+          },
+          onDragLeave: (e: DragEvent) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropLane(id => (id === lane.id ? null : id));
+          },
+          onDrop: (e: DragEvent) => {
+            e.preventDefault();
+            const id = e.dataTransfer.getData(DRAG_TYPE);
+            endDrag();
+            if (id) onMove(id, lane.id);
+          },
+        }
+      : {};
 
   return (
     <div className={`board-tab${desktop ? ' is-desktop' : ''}`}>
@@ -138,7 +169,12 @@ export function BoardTab({ board, now, desktop, selectedId, selectedGoalId, onOp
         {visibleLanes.map(lane => {
           const notes = notesIn(lane);
           return (
-            <section key={lane.id} className="board-lane" aria-label={lane.title}>
+            <section
+              key={lane.id}
+              className={`board-lane${dropLane === lane.id ? ' is-drop-target' : ''}`}
+              aria-label={lane.title}
+              {...dropProps(lane)}
+            >
               <header className="board-lane-head">
                 <span className={`swatch paper-${lane.color}`} aria-hidden="true" />
                 <h2>{lane.title}</h2>
@@ -149,7 +185,21 @@ export function BoardTab({ board, now, desktop, selectedId, selectedGoalId, onOp
               ) : (
                 <div className={`note-grid is-${size}`}>
                   {notes.map(note => (
-                    <div key={note.id} className="note-cell">
+                    <div
+                      key={note.id}
+                      className={`note-cell${dragging === note.id ? ' is-dragging' : ''}`}
+                      draggable={desktop}
+                      onDragStart={
+                        desktop
+                          ? e => {
+                              e.dataTransfer.setData(DRAG_TYPE, note.id);
+                              e.dataTransfer.effectAllowed = 'move';
+                              setDragging(note.id);
+                            }
+                          : undefined
+                      }
+                      onDragEnd={desktop ? endDrag : undefined}
+                    >
                       <StickyNote
                         note={note}
                         lane={lane}

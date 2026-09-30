@@ -1,11 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { CalendarDays, LayoutGrid, Monitor, Plus, SearchCheck } from 'lucide-react';
 import { unverifiedCount } from '../../../shared/board.ts';
+import { applyPatch } from '../../../shared/ops.ts';
 import { repeatStatus } from '../../../shared/recurring.ts';
 import type { Goal, LaneKind, Note } from '../../../shared/types.ts';
 import { currentTime, useNow } from '../lib/now.ts';
 import type { EditorTab } from '../lib/route.ts';
-import { board, draftGoal, draftNote, useBoard } from '../store/board.ts';
+import { board, draftGoal, draftNote, laneChange, useBoard, useSync } from '../store/board.ts';
 import { showToast } from '../store/toasts.ts';
 import { AddMenu } from './AddMenu.tsx';
 import { BoardTab } from './BoardTab.tsx';
@@ -41,10 +42,37 @@ function Brand() {
   );
 }
 
+/** Live when connected to the wall; says so when changes are waiting for the connection. */
 function LiveBadge() {
+  const { status, waiting } = useSync();
+  // Brief drops (a phone waking up) reconnect within a second or two; don't flash "Offline".
+  const [shownOffline, setShownOffline] = useState(false);
+  useEffect(() => {
+    if (status !== 'offline') {
+      setShownOffline(false);
+      return;
+    }
+    const id = window.setTimeout(() => setShownOffline(true), 2500);
+    return () => window.clearTimeout(id);
+  }, [status]);
+
+  if (shownOffline) {
+    return (
+      <span className="live is-offline" role="status" title="Changes are kept on this device and sent when the connection is back">
+        <span className="live-dot" aria-hidden="true" /> Offline{waiting > 0 ? ` · ${waiting} waiting` : ''}
+      </span>
+    );
+  }
+  if (status === 'live' || status === 'offline') {
+    return (
+      <span className="live" role="status" title="Changes show on the wall instantly">
+        <span className="live-dot" aria-hidden="true" /> Live
+      </span>
+    );
+  }
   return (
-    <span className="live" title="Changes show on the wall instantly">
-      <span className="live-dot" aria-hidden="true" /> Live
+    <span className="live is-connecting" role="status">
+      <span className="live-dot" aria-hidden="true" /> Connecting…
     </span>
   );
 }
@@ -77,7 +105,18 @@ export function EditorApp({ route, go }: { route: EditorRoute; go: (token: strin
 
   const selected = route.noteId ? data.notes.find(n => n.id === route.noteId) : undefined;
   const selectedGoal = route.goalId ? data.goals.find(g => g.id === route.goalId) : undefined;
-  const close = () => go(lastTab);
+
+  // Deleted on another device (or an old link): close it instead of showing an empty panel.
+  const missing = (route.noteId && !selected) || (route.goalId && !selectedGoal);
+  useEffect(() => {
+    if (!missing) return;
+    go(lastTab);
+    showToast({ text: route.goalId ? 'That goal isn’t on the board anymore.' : 'That note isn’t on the board anymore.' });
+  }, [missing, route.goalId, lastTab, go]);
+  const close = () => {
+    board.flush();
+    go(lastTab);
+  };
   const openNote = (id: string) => go(`note-${id}`);
   const openGoal = (id: string) => go(`goal-${id}`);
   const newGoal = () => go('new-goal');
@@ -119,15 +158,39 @@ export function EditorApp({ route, go }: { route: EditorRoute; go: (token: strin
   const logRoutine = () => {
     if (!selected) return;
     const id = selected.id;
-    board.logRoutine(id);
+    const at = board.logRoutine(id);
     const note = board.get().notes.find(n => n.id === id);
     const status = note ? repeatStatus(note, currentTime()) : null;
-    if (!status) return;
+    if (!status || !at) return;
     const period = status.every === 'day' ? 'today' : status.every === 'week' ? 'this week' : 'this month';
     const back = status.every === 'day' ? 'tomorrow' : status.every === 'week' ? 'on Sunday' : 'on the 1st';
     const text = status.complete ? `Done for ${period}. It comes back ${back}.` : `Nice. ${status.done} of ${status.target} ${period}.`;
-    showToast({ text, actionLabel: 'Undo', action: () => board.undoRoutine(id) });
+    showToast({ text, actionLabel: 'Undo', action: () => board.undoRoutine(id, at) });
   };
+
+  /** The column picker in a note: moving can turn it into a recurring task or back. */
+  const changeSelected = (patch: Partial<Note>) => {
+    if (!selected) return;
+    if (patch.laneId && patch.laneId !== selected.laneId) {
+      moveNote(selected.id, patch.laneId);
+      return;
+    }
+    board.updateNote(selected.id, patch);
+  };
+
+  /** Dragging a square to another column (computers). */
+  const moveNote = (id: string, laneId: string) => {
+    const undo = board.moveNote(id, laneId);
+    const lane = data.lanes.find(l => l.id === laneId);
+    if (undo) showToast({ text: `Moved to ${lane?.title || 'another column'}`, actionLabel: 'Undo', action: undo });
+  };
+
+  const changeDraft = (patch: Partial<Note>) =>
+    setDraft(d => {
+      if (!d) return d;
+      if (patch.laneId && patch.laneId !== d.laneId) return applyPatch(d, laneChange(d, data.lanes, patch.laneId));
+      return { ...d, ...patch };
+    });
 
   const addGoalDraft = () => {
     if (!goalDraft) return;
@@ -172,7 +235,7 @@ export function EditorApp({ route, go }: { route: EditorRoute; go: (token: strin
       lanes={data.lanes}
       mode="new"
       now={now}
-      onChange={patch => setDraft(d => (d ? { ...d, ...patch } : d))}
+      onChange={changeDraft}
       onClose={close}
       onAdd={addDraft}
     />
@@ -183,7 +246,7 @@ export function EditorApp({ route, go }: { route: EditorRoute; go: (token: strin
       lanes={data.lanes}
       mode="edit"
       now={now}
-      onChange={patch => board.updateNote(selected.id, patch)}
+      onChange={changeSelected}
       onClose={close}
       onDelete={deleteSelected}
       onToggleDone={toggleDone}
@@ -213,6 +276,7 @@ export function EditorApp({ route, go }: { route: EditorRoute; go: (token: strin
             onOpen={openNote}
             onOpenGoal={openGoal}
             onNewGoal={newGoal}
+            onMove={moveNote}
           />
         );
     }

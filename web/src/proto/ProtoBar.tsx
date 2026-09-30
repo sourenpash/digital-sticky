@@ -24,7 +24,7 @@ export function ProtoBar({ current }: { current: string }) {
     <div className={`proto${open ? ' is-open' : ''}`}>
       <button type="button" className="proto-toggle" aria-expanded={open} onClick={() => setOpen(o => !o)}>
         <FlaskConical aria-hidden="true" />
-        <span>Prototype</span>
+        <span>Preview</span>
         <ChevronDown aria-hidden="true" className="proto-chevron" />
       </button>
       {open && (

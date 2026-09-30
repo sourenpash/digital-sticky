@@ -1,10 +1,11 @@
-// Board data shared by the wall, the editor and (from checkpoint 2) the server.
+// Board data shared by the wall, the editor and the server.
 
 export const NOTE_COLORS = ['yellow', 'pink', 'blue', 'green', 'orange', 'purple', 'white'] as const;
 export type NoteColor = (typeof NOTE_COLORS)[number];
 
 /** What a column is for; decides which template a new note in it starts from. */
-export type LaneKind = 'application' | 'source' | 'task' | 'routine' | 'reminder' | 'note';
+export const LANE_KINDS = ['application', 'source', 'task', 'routine', 'reminder', 'note'] as const;
+export type LaneKind = (typeof LANE_KINDS)[number];
 
 export const STAGES = ['Researching', 'Drafting', 'Submitted', 'Awarded', 'Declined'] as const;
 export type Stage = (typeof STAGES)[number];
@@ -26,7 +27,8 @@ export interface ChecklistItem {
   done: boolean;
 }
 
-export type RepeatEvery = 'day' | 'week' | 'month';
+export const REPEAT_EVERY = ['day', 'week', 'month'] as const;
+export type RepeatEvery = (typeof REPEAT_EVERY)[number];
 
 /** A recurring task has no deadline; it comes back every day, week or month. */
 export interface Repeat {
@@ -72,7 +74,8 @@ export interface Note {
 }
 
 /** What moves a goal's progress bar. */
-export type GoalMeasure = 'submitted' | 'won' | 'count';
+export const GOAL_MEASURES = ['submitted', 'won', 'count'] as const;
+export type GoalMeasure = (typeof GOAL_MEASURES)[number];
 
 /** A target with a progress bar on the wall, like "Submit 5 applications by Dec 31". */
 export interface Goal {
@@ -88,8 +91,10 @@ export interface Goal {
   createdAt: string;
 }
 
-export type NightMode = 'auto' | 'on' | 'off';
-export type NightStyle = 'dim' | 'clock';
+export const NIGHT_MODES = ['auto', 'on', 'off'] as const;
+export type NightMode = (typeof NIGHT_MODES)[number];
+export const NIGHT_STYLES = ['dim', 'clock'] as const;
+export type NightStyle = (typeof NIGHT_STYLES)[number];
 
 export interface Settings {
   night: { mode: NightMode; start: string; end: string; style: NightStyle };

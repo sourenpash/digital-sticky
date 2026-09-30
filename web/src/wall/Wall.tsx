@@ -21,10 +21,11 @@ interface Box {
  * and every size in wall.css is a multiple of it, so it looks the same on a 1080p
  * monitor, a 4K monitor, or the small preview in the editor.
  */
-export function Wall({ board, now, connectUrl }: { board: Board; now: Date; connectUrl: string }) {
+export function Wall({ board, now, connectUrl }: { board: Board; now: Date; connectUrl: string | null }) {
   const frameRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<Box | null>(null);
   const mode = wallMode(board.settings, now);
+  const connect = board.settings.wall.showConnect ? connectUrl : null;
 
   useLayoutEffect(() => {
     const frame = frameRef.current;
@@ -67,8 +68,8 @@ export function Wall({ board, now, connectUrl }: { board: Board; now: Date; conn
                 <WallColumns lanes={board.lanes} notes={board.notes} now={now} u={box.u} />
                 <aside className="wall-side">
                   <CalendarPanel notes={board.notes} lanes={board.lanes} now={now} />
-                  <UpcomingList notes={board.notes} now={now} max={board.settings.wall.showConnect ? 4 : 8} />
-                  {board.settings.wall.showConnect && <ConnectCard url={connectUrl} />}
+                  <UpcomingList notes={board.notes} now={now} max={connect ? 4 : 8} />
+                  {connect && <ConnectCard url={connect} />}
                 </aside>
               </div>
             </>

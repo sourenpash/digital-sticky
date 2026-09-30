@@ -1,30 +1,54 @@
-// Renders the prototype in headless Chromium and saves PNGs to docs/screenshots.
+// Renders the app in headless Chromium against a real board server and saves PNGs.
+// Each shot gets a fresh server with the sample board (dated around NOW).
 // Usage: npm run build && npm run screenshots [-- name-filter]
-import { mkdir } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { chromium, type Page } from 'playwright-core';
-import { preview } from 'vite';
+import type { StateResponse } from '../shared/api.ts';
+import { makeEmptyBoard } from '../shared/defaults.ts';
+import { makeSampleBoard, SAMPLE_CONNECT_URL } from '../shared/sample.ts';
+import { startServer, type RunningServer } from '../server/server.ts';
 
 const OUT = 'docs/screenshots'; // curated shots referenced by the README
 const REVIEW = '.screenshots'; // everything else (git-ignored)
 const NOW = '2026-09-30T19:42:00'; // a Wednesday evening, so the sample dates are stable
+const PORT = 4173;
+
+interface Api {
+  get(path: string): Promise<unknown>;
+  send(method: string, path: string, body: unknown): Promise<unknown>;
+}
 
 interface Shot {
   name: string;
-  query: string;
   hash: string;
   viewport: { width: number; height: number };
   scale?: number;
   mobile?: boolean;
   colorScheme?: 'light' | 'dark';
-  act?: (page: Page) => Promise<void>;
+  /** Start from a brand-new board instead of the sample one. */
+  empty?: boolean;
+  /** Change the board through the API before the page opens. */
+  setup?: (api: Api) => Promise<void>;
+  act?: (page: Page, server: RunningServer) => Promise<void>;
   /** Commit this one to docs/screenshots. */
   keep?: boolean;
 }
 
 const phone = { width: 390, height: 844 };
 const hd = { width: 1920, height: 1080 };
-
 const desktop = { width: 1440, height: 900 };
+const onPhone = { viewport: phone, scale: 2, mobile: true };
+
+const nightMode = (style: 'dim' | 'clock') => (api: Api) => api.send('PATCH', '/api/settings', { night: { mode: 'on', style } }).then(() => {});
+const popUpReminder = async (api: Api) => {
+  const { board } = (await api.get('/api/state')) as StateResponse;
+  const reminder = board.notes.find(note => note.remindAt);
+  if (reminder) await api.send('POST', '/api/alerts', { noteId: reminder.id });
+  await api.send('PATCH', '/api/settings', { wall: { showConnect: true } });
+};
+
 const openNsf = async (page: Page) => {
   await page.getByRole('button', { name: /NSF CAREER proposal/ }).first().click();
   await page.waitForTimeout(400);
@@ -45,27 +69,30 @@ const showLane = (name: string) => async (page: Page) => {
   await page.getByRole('region', { name }).scrollIntoViewIfNeeded();
   await page.waitForTimeout(300);
 };
+const showSetting = (name: string) => async (page: Page) => {
+  await page.getByRole('heading', { name }).evaluate(el => el.scrollIntoView({ block: 'start' }));
+  await page.waitForTimeout(300);
+};
 
 const shots: Shot[] = [
-  { keep: true, name: 'wall-day', query: 'preset=day', hash: 'wall', viewport: hd },
-  { name: 'wall-banner-qr', query: 'preset=day,banner,qr', hash: 'wall', viewport: hd },
-  { keep: true, name: 'wall-night-dim', query: 'preset=dim', hash: 'wall', viewport: hd },
-  { name: 'wall-night-clock', query: 'preset=clock', hash: 'wall', viewport: hd },
-  { keep: true, name: 'demo-side-by-side', query: 'preset=day', hash: 'demo', viewport: { width: 1600, height: 1000 } },
-  { keep: true, name: 'phone-board', query: 'preset=day', hash: 'board', viewport: phone, scale: 2, mobile: true },
-  { name: 'phone-board-dark', query: 'preset=day', hash: 'board', viewport: phone, scale: 2, mobile: true, colorScheme: 'dark' },
-  { keep: true, name: 'phone-note', query: 'preset=day', hash: 'board', viewport: phone, scale: 2, mobile: true, act: openNsf },
-  { name: 'phone-add-menu', query: 'preset=day', hash: 'board', viewport: phone, scale: 2, mobile: true, act: openAdd },
-  { keep: true, name: 'phone-goal', query: 'preset=day', hash: 'board', viewport: phone, scale: 2, mobile: true, act: openGoal },
-  { keep: true, name: 'phone-recurring', query: 'preset=day', hash: 'board', viewport: phone, scale: 2, mobile: true, act: openRoutine },
-  { name: 'phone-recurring-lane', query: 'preset=day', hash: 'board', viewport: phone, scale: 2, mobile: true, act: showLane('Recurring') },
+  { keep: true, name: 'wall-day', hash: 'wall', viewport: hd },
+  { keep: true, name: 'wall-first-day', hash: 'wall', viewport: hd, empty: true },
+  { name: 'wall-banner-qr', hash: 'wall', viewport: hd, setup: popUpReminder },
+  { keep: true, name: 'wall-night-dim', hash: 'wall', viewport: hd, setup: nightMode('dim') },
+  { name: 'wall-night-clock', hash: 'wall', viewport: hd, setup: nightMode('clock') },
+  { keep: true, name: 'demo-side-by-side', hash: 'demo', viewport: { width: 1600, height: 1000 } },
+  { keep: true, name: 'phone-board', hash: 'board', ...onPhone },
+  { name: 'phone-board-dark', hash: 'board', ...onPhone, colorScheme: 'dark' },
+  { name: 'phone-first-day', hash: 'board', ...onPhone, empty: true },
+  { keep: true, name: 'phone-note', hash: 'board', ...onPhone, act: openNsf },
+  { name: 'phone-add-menu', hash: 'board', ...onPhone, act: openAdd },
+  { keep: true, name: 'phone-goal', hash: 'board', ...onPhone, act: openGoal },
+  { keep: true, name: 'phone-recurring', hash: 'board', ...onPhone, act: openRoutine },
+  { name: 'phone-recurring-lane', hash: 'board', ...onPhone, act: showLane('Recurring') },
   {
     name: 'phone-new-goal',
-    query: 'preset=day',
     hash: 'board',
-    viewport: phone,
-    scale: 2,
-    mobile: true,
+    ...onPhone,
     act: async page => {
       await openAdd(page);
       await page.getByRole('button', { name: /^Goal/ }).click();
@@ -74,37 +101,64 @@ const shots: Shot[] = [
   },
   {
     name: 'phone-new-application',
-    query: 'preset=day',
     hash: 'board',
-    viewport: phone,
-    scale: 2,
-    mobile: true,
+    ...onPhone,
     act: async page => {
       await openAdd(page);
       await page.getByRole('button', { name: /Funding application/ }).click();
       await page.waitForTimeout(400);
     },
   },
-  { name: 'phone-calendar', query: 'preset=day', hash: 'calendar', viewport: phone, scale: 2, mobile: true },
-  { name: 'phone-to-check', query: 'preset=day', hash: 'check', viewport: phone, scale: 2, mobile: true },
-  { name: 'phone-wall-settings', query: 'preset=day', hash: 'display', viewport: phone, scale: 2, mobile: true },
-  { name: 'phone-pin', query: 'preset=day', hash: 'login', viewport: phone, scale: 2, mobile: true },
-  { keep: true, name: 'desktop-board', query: 'preset=day', hash: 'board', viewport: desktop, act: openNsf },
-  { name: 'desktop-goal', query: 'preset=day', hash: 'board', viewport: desktop, act: openGoal },
-  { name: 'desktop-board-closed', query: 'preset=day', hash: 'board', viewport: desktop },
-  { name: 'desktop-calendar', query: 'preset=day', hash: 'calendar', viewport: desktop },
-  { name: 'desktop-wall-settings', query: 'preset=day,qr', hash: 'display', viewport: desktop },
+  {
+    name: 'phone-offline',
+    hash: 'board',
+    ...onPhone,
+    act: async (page, server) => {
+      await server.stop();
+      await openNsf(page);
+      await page.getByRole('checkbox', { name: 'Budget + justification' }).click();
+      await page.getByRole('button', { name: 'Close' }).click();
+      await page.getByText(/Offline · 1 waiting/).waitFor({ timeout: 10_000 });
+    },
+  },
+  { name: 'phone-calendar', hash: 'calendar', ...onPhone },
+  { name: 'phone-to-check', hash: 'check', ...onPhone },
+  { keep: true, name: 'phone-wall-settings', hash: 'display', ...onPhone, act: showSetting('Columns') },
+  { keep: true, name: 'desktop-board', hash: 'board', viewport: desktop, act: openNsf },
+  { name: 'desktop-goal', hash: 'board', viewport: desktop, act: openGoal },
+  { name: 'desktop-board-closed', hash: 'board', viewport: desktop },
+  { name: 'desktop-calendar', hash: 'calendar', viewport: desktop },
+  { name: 'desktop-wall-settings', hash: 'display', viewport: desktop },
 ];
 
 const filter = process.argv[2];
+const staticDir = resolve('dist/web');
+const { buildId } = JSON.parse(await readFile(join(staticDir, 'build.json'), 'utf8')) as { buildId: string };
 await mkdir(OUT, { recursive: true });
 await mkdir(REVIEW, { recursive: true });
-const server = await preview({ preview: { port: 4173, strictPort: true }, logLevel: 'warn' });
 const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM ?? '/opt/pw-browsers/chromium' });
 
 try {
   for (const shot of shots) {
     if (filter && !shot.name.includes(filter)) continue;
+    const dataDir = await mkdtemp(join(tmpdir(), 'sticky-shot-'));
+    const server = await startServer({
+      port: PORT,
+      host: '127.0.0.1',
+      dataDir,
+      seed: shot.empty ? makeEmptyBoard : () => makeSampleBoard(new Date(NOW)),
+      staticDir,
+      connectUrl: SAMPLE_CONNECT_URL,
+      buildId,
+    });
+    const base = `http://127.0.0.1:${PORT}`;
+    const api: Api = {
+      get: async path => (await fetch(base + path)).json(),
+      send: async (method, path, body) =>
+        (await fetch(base + path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json(),
+    };
+    await shot.setup?.(api);
+
     const context = await browser.newContext({
       viewport: shot.viewport,
       deviceScaleFactor: shot.scale ?? 1,
@@ -114,16 +168,18 @@ try {
     });
     const page = await context.newPage();
     page.on('pageerror', err => console.error(`[${shot.name}] page error:`, err.message));
-    await page.goto(`http://localhost:4173/?now=${NOW}&proto=0&${shot.query}#${shot.hash}`);
+    await page.goto(`${base}/?now=${NOW}#${shot.hash}`);
+    await page.locator('.wall, .editor, .demo').first().waitFor();
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(700);
-    if (shot.act) await shot.act(page);
+    if (shot.act) await shot.act(page, server);
     const path = `${shot.keep ? OUT : REVIEW}/${shot.name}.png`;
     await page.screenshot({ path });
     console.log(`saved ${path}`);
     await context.close();
+    await server.stop();
+    await rm(dataDir, { recursive: true, force: true });
   }
 } finally {
   await browser.close();
-  server.httpServer.close();
 }
