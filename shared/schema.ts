@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { GOAL_MEASURES, LANE_KINDS, NIGHT_MODES, NIGHT_STYLES, NOTE_COLORS, REPEAT_EVERY, STAGES } from './types.ts';
+import { DEFAULT_SETTINGS } from './defaults.ts';
+import { CRYPTO_SYMBOL, MAX_CRYPTO, MAX_NEWS, MAX_STOCKS, NEWS_SOURCE_IDS, STOCK_SYMBOL } from './ticker.ts';
+import { APP_TYPES, GOAL_MEASURES, LANE_KINDS, NIGHT_MODES, NIGHT_STYLES, NOTE_COLORS, REPEAT_EVERY, STAGES } from './types.ts';
 
 // What the server accepts. Strings are generous (a half-typed title is fine), while
 // ids, dates, links and structure are strict, so a bad request can't damage the board.
@@ -60,6 +62,7 @@ export const noteSchema = z.object({
   due: when.optional(),
   remindAt: dateTime.optional(),
   remindedFor: dateTime.optional(),
+  appType: z.enum(APP_TYPES).optional(),
   stage: z.enum(STAGES).optional(),
   funder: funder.optional(),
   amount: amount.optional(),
@@ -93,6 +96,7 @@ export const notePatchSchema = z.object({
   color: clearable(noteColorSchema),
   due: clearable(when),
   remindAt: clearable(dateTime),
+  appType: clearable(z.enum(APP_TYPES)),
   stage: clearable(z.enum(STAGES)),
   funder: clearable(funder),
   amount: clearable(amount),
@@ -149,6 +153,13 @@ export const goalPatchSchema = z.object({
   by: clearable(dateOnly),
 });
 
+const tickerSchema = z.object({
+  show: z.boolean(),
+  crypto: z.array(z.string().regex(CRYPTO_SYMBOL, 'Use a coin symbol like BTC')).max(MAX_CRYPTO),
+  stocks: z.array(z.string().regex(STOCK_SYMBOL, 'Use a stock symbol like AAPL')).max(MAX_STOCKS),
+  news: z.array(z.union([z.enum(NEWS_SOURCE_IDS), webAddress])).max(MAX_NEWS),
+});
+
 export const settingsSchema = z.object({
   night: z.object({
     mode: z.enum(NIGHT_MODES),
@@ -161,11 +172,14 @@ export const settingsSchema = z.object({
     chime: z.boolean(),
     alertMinutes: z.number().int().min(1).max(24 * 60),
   }),
+  // Boards saved before the ticker existed get the default one.
+  ticker: tickerSchema.default(() => structuredClone(DEFAULT_SETTINGS.ticker)),
 });
 
 export const settingsPatchSchema = z.object({
   night: settingsSchema.shape.night.partial().optional(),
   wall: settingsSchema.shape.wall.partial().optional(),
+  ticker: tickerSchema.partial().optional(),
 });
 
 /** Most reminders that can be showing at once. */

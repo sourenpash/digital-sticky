@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import { stageLabel } from '../../../shared/applications.ts';
 import { isFinishedStage, noteWhen } from '../../../shared/board.ts';
 import { countdownLabel, daysUntil, isPast, reminderLabel, timeLabel, urgencyOf, type When } from '../../../shared/dates.ts';
 import { repeatStatus, type RepeatStatus } from '../../../shared/recurring.ts';
@@ -28,12 +29,14 @@ export function chipFor(note: Note, now: Date, opts: { compact?: boolean } = {})
   const compact = opts.compact ?? false;
   const routine = repeatStatus(note, now);
   if (routine) return routineChip(routine, compact);
-  if (note.stage && isFinishedStage(note)) {
+  const w = noteWhen(note);
+  // An upcoming interview reminder says more than "Interview".
+  const interviewSoon = note.stage === 'Interview' && w && !isPast(w.when, now);
+  if (note.stage && isFinishedStage(note) && !interviewSoon) {
     return note.stage === 'Declined'
       ? { label: 'Declined', tone: 'muted' }
-      : { label: note.stage, tone: 'good', icon: 'check' };
+      : { label: stageLabel(note.stage, note.appType), tone: 'good', icon: 'check' };
   }
-  const w = noteWhen(note);
   if (!w) return null;
   if (w.kind === 'remind') {
     return isPast(w.when, now)

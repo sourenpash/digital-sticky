@@ -14,7 +14,8 @@ const wallNote = (wall: Page, title: string) => wall.locator('.wall .note', { ha
 
 async function addApplication(phone: Page, title: string, dueInDays: number): Promise<void> {
   await phone.getByRole('button', { name: 'Add a note' }).click();
-  await phone.getByRole('button', { name: /Funding application/ }).click();
+  await phone.getByRole('button', { name: /^Application/ }).click();
+  expect(await phone.getByRole('radio', { name: 'Grant / funding' }).getAttribute('aria-checked')).toBe('true');
   await phone.getByLabel('Title').fill(title);
   await phone.getByLabel('Deadline date').fill(format(addDays(new Date(), dueInDays), 'yyyy-MM-dd'));
   await phone.getByLabel('New checklist item').fill('Ask for a nomination letter');

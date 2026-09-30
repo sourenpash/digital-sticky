@@ -230,7 +230,7 @@
 .wall-main {
   display: grid;
   flex: 1;
-  grid-template-columns: minmax(0, 1fr) calc(var(--u) * 27);
+  grid-template-columns: minmax(0, 1fr) calc(var(--u) * 25);
   gap: calc(var(--u) * 2);
   min-height: 0;
 }
@@ -329,94 +329,6 @@
   border-left: 1px solid var(--w-line);
 }
 
-.wall-cal-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: calc(var(--u) * 0.8);
-}
-
-.wall-cal-month {
-  font-size: calc(var(--u) * 1.9);
-  font-weight: 700;
-}
-
-.wall-cal-year {
-  color: var(--w-muted);
-  font-size: calc(var(--u) * 1.2);
-  font-variant-numeric: tabular-nums;
-}
-
-.wall-cal-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  row-gap: calc(var(--u) * 0.75);
-  text-align: center;
-}
-
-.wall-cal-dow {
-  padding-bottom: calc(var(--u) * 0.4);
-  color: var(--w-faint);
-  font-size: calc(var(--u) * 0.9);
-  font-weight: 800;
-}
-
-.wall-cal-day {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: calc(var(--u) * 0.15);
-}
-
-.wall-cal-mon {
-  position: absolute;
-  top: calc(var(--u) * -0.75);
-  left: 50%;
-  color: var(--paper-yellow);
-  font-size: calc(var(--u) * 0.72);
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  transform: translateX(-50%);
-}
-
-.wall-cal-day.is-next .wall-cal-num {
-  color: #d9cfc0;
-}
-
-.wall-cal-num {
-  display: grid;
-  place-items: center;
-  width: calc(var(--u) * 2.3);
-  height: calc(var(--u) * 2.3);
-  border-radius: 50%;
-  font-size: calc(var(--u) * 1.1);
-  font-variant-numeric: tabular-nums;
-}
-
-.wall-cal-day.is-past .wall-cal-num {
-  color: var(--w-faint);
-}
-
-.wall-cal-day.is-today .wall-cal-num {
-  background: var(--paper-yellow);
-  color: var(--paper-ink);
-  font-weight: 800;
-}
-
-.wall-cal-dots {
-  display: flex;
-  gap: calc(var(--u) * 0.2);
-  height: calc(var(--u) * 0.5);
-}
-
-.dot {
-  width: calc(var(--u) * 0.5);
-  height: calc(var(--u) * 0.5);
-  border-radius: 50%;
-  background: var(--paper);
-}
 
 .wall-up-head {
   display: flex;
@@ -528,6 +440,256 @@
   margin: 0;
   color: var(--w-faint);
   font-size: calc(var(--u) * 1.1);
+}
+
+/* Ticker: prices and headlines sliding along the bottom edge (day only). */
+.wall-ticker {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--u) * 1);
+  height: calc(var(--u) * 2.5);
+  margin: calc(var(--u) * -0.4) calc(var(--u) * -2.4) calc(var(--u) * -2.2);
+  padding-left: calc(var(--u) * 2.4);
+  border-top: 1px solid var(--w-line);
+  background: rgba(0, 0, 0, 0.28);
+  font-size: calc(var(--u) * 1.05);
+  white-space: nowrap;
+}
+
+.wall-ticker-tag {
+  flex: none;
+  padding: calc(var(--u) * 0.15) calc(var(--u) * 0.5);
+  border-radius: calc(var(--u) * 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--w-muted);
+  font-size: calc(var(--u) * 0.72);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.wall-ticker-window {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 2%, #000 98%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 2%, #000 98%, transparent);
+}
+
+.wall-ticker-track {
+  display: flex;
+  width: max-content;
+  animation: ticker-scroll var(--ticker-s, 60s) linear infinite;
+}
+
+.wall-ticker-run {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 2.4);
+  padding-right: calc(var(--u) * 2.4);
+}
+
+@keyframes ticker-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wall-ticker-track { animation: none; }
+}
+
+.tk-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45em;
+}
+
+.tk-sym {
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.tk-price {
+  color: var(--w-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.tk-change {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tk-up { color: var(--tone-good); }
+.tk-down { color: var(--tone-overdue); }
+.tk-flat { color: var(--w-muted); }
+
+.tk-news {
+  color: #d9cfc0;
+}
+
+.tk-src {
+  color: var(--w-muted);
+  font-size: 0.78em;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Next 2 weeks: a strip of days along the bottom, with what's due written in. */
+.wall-weeks {
+  flex: none;
+}
+
+.wall-weeks-head {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--u) * 1.1);
+  margin-bottom: calc(var(--u) * 0.6);
+}
+
+.wall-weeks-head .wall-side-title {
+  margin: 0;
+}
+
+.wall-weeks-range {
+  color: var(--w-faint);
+  font-size: calc(var(--u) * 1);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.wall-weeks-head .wall-up-pills {
+  margin-left: auto;
+  align-self: center;
+}
+
+.wall-weeks-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-rows: calc(var(--u) * 6.4);
+  gap: calc(var(--u) * 0.45);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wall-wk-day {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 0.35);
+  min-width: 0;
+  padding: calc(var(--u) * 0.45) calc(var(--u) * 0.55);
+  border-radius: calc(var(--u) * 0.45);
+  background: rgba(255, 255, 255, 0.022);
+  box-shadow: inset 0 0 0 1px var(--w-line);
+}
+
+/* The more a day holds, the warmer it looks, so busy stretches stand out from across the room. */
+.wall-wk-day.load-1 { background: rgba(255, 214, 120, 0.05); }
+.wall-wk-day.load-2 { background: rgba(255, 190, 100, 0.085); }
+.wall-wk-day.load-3 { background: rgba(255, 170, 90, 0.12); }
+
+.wall-wk-day.is-soon {
+  box-shadow: inset 0 0 0 1px rgba(255, 192, 92, 0.45);
+}
+
+.wall-wk-day.is-today {
+  box-shadow: inset 0 0 0 calc(var(--u) * 0.14) var(--paper-yellow);
+}
+
+.wall-wk-date {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--u) * 0.45);
+  line-height: 1;
+}
+
+.wall-wk-dow {
+  color: var(--w-muted);
+  font-size: calc(var(--u) * 0.8);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.wall-wk-num {
+  font-size: calc(var(--u) * 1.05);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.wall-wk-day.is-today .wall-wk-dow {
+  color: var(--paper-yellow);
+}
+
+.wall-wk-day.is-weekend .wall-wk-dow,
+.wall-wk-day.is-weekend .wall-wk-num {
+  color: var(--w-faint);
+}
+
+.wall-wk-items {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 0.2);
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wall-wk-item {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 0.3);
+  min-width: 0;
+  padding: calc(var(--u) * 0.12) calc(var(--u) * 0.45);
+  border-radius: calc(var(--u) * 0.2);
+  background: var(--paper);
+  color: var(--paper-ink);
+  font-size: calc(var(--u) * 0.85);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.wall-wk-item svg {
+  flex: none;
+  width: 0.95em;
+  height: 0.95em;
+}
+
+.wall-wk-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.wall-wk-time {
+  flex: none;
+  margin-left: auto;
+  padding-left: calc(var(--u) * 0.2);
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+.wall-wk-item.is-overdue {
+  box-shadow: inset calc(var(--u) * 0.3) 0 0 var(--tone-overdue);
+  padding-left: calc(var(--u) * 0.65);
+}
+
+.wall-wk-item.is-overdue .wall-wk-time {
+  color: #a3261a;
+  opacity: 1;
+  text-transform: uppercase;
+  font-size: 0.85em;
+  letter-spacing: 0.06em;
+}
+
+.wall-wk-more {
+  color: var(--w-muted);
+  font-size: calc(var(--u) * 0.82);
+  font-weight: 700;
 }
 
 .wall-connect {
@@ -677,10 +839,17 @@
 .wall-mode-dim .note,
 .wall-mode-dim .wall-connect,
 .wall-mode-dim .swatch,
-.wall-mode-dim .dot,
-.wall-mode-dim .goal-bar-fill,
-.wall-mode-dim .wall-cal-day.is-today .wall-cal-num {
+.wall-mode-dim .wall-wk-item,
+.wall-mode-dim .goal-bar-fill {
   filter: brightness(0.48) saturate(0.7);
+}
+
+.wall-mode-dim .wall-wk-day.is-today {
+  box-shadow: inset 0 0 0 calc(var(--u) * 0.14) rgba(255, 230, 128, 0.35);
+}
+
+.wall-mode-dim .wall-wk-day.is-today .wall-wk-dow {
+  color: #a8975a;
 }
 
 .wall-mode-dim .wall-goal-value {
@@ -766,3 +935,46 @@
   filter: brightness(0.6);
   animation: banner-in 0.5s ease-out;
 }
+
+/* The phone remote's cursor (preview page). */
+.wall-cursor {
+  position: absolute;
+  z-index: 20;
+  width: calc(var(--u) * 2);
+  height: calc(var(--u) * 2);
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.wall-cursor.is-on {
+  opacity: 1;
+}
+
+.wall-cursor svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: #fff;
+  stroke: #1b1916;
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
+}
+
+.wall-cursor-click {
+  position: absolute;
+  top: calc(var(--u) * -1);
+  left: calc(var(--u) * -1);
+  width: calc(var(--u) * 2.4);
+  height: calc(var(--u) * 2.4);
+  border: calc(var(--u) * 0.2) solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  animation: cursor-click 0.45s ease-out forwards;
+}
+
+@keyframes cursor-click {
+  from { transform: scale(0.3); opacity: 1; }
+  to { transform: scale(1.3); opacity: 0; }
+}
+

@@ -10,10 +10,10 @@ const MEASURES: Array<{ value: GoalMeasure; title: string; hint: string; placeho
   {
     value: 'submitted',
     title: 'Applications submitted',
-    hint: 'Counts applications marked Submitted, Awarded or Declined',
+    hint: 'Counts applications that are submitted or further along',
     placeholder: 'Submit 5 applications',
   },
-  { value: 'won', title: 'Money won', hint: 'Adds up the amounts of Awarded applications', placeholder: 'Win $10,000 in funding' },
+  { value: 'won', title: 'Money won', hint: 'Adds up the amounts of awarded grants and fellowships', placeholder: 'Win $10,000 in funding' },
   { value: 'count', title: 'I’ll count it myself', hint: 'Tap + whenever you make progress', placeholder: 'Talk to 10 program officers' },
 ];
 

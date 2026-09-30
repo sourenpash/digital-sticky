@@ -2,11 +2,15 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { addDays, format, isSameDay, parseISO, set } from 'date-fns';
 import {
   AlignLeft,
+  Award,
   Bell,
+  BriefcaseBusiness,
   CalendarClock,
   Check,
   ChevronDown,
   ExternalLink,
+  FileText,
+  GraduationCap,
   Landmark,
   Link2,
   ListChecks,
@@ -17,13 +21,17 @@ import {
   Trash2,
   Undo2,
   X,
+  type LucideIcon,
 } from 'lucide-react';
+import { APP_TYPE_INFO, appTypeOf, isTemplateChecklist, stageLabel, templateChecklist } from '../../../shared/applications.ts';
 import { lanesInOrder } from '../../../shared/board.ts';
 import { composeWhen, parseWhen, splitWhen } from '../../../shared/dates.ts';
 import { describeRepeat, pruneCompletions, repeatStatus, weekDots } from '../../../shared/recurring.ts';
 import {
+  APP_TYPES,
   NOTE_COLORS,
   STAGES,
+  type AppType,
   type ChecklistItem,
   type Lane,
   type LaneKind,
@@ -59,7 +67,7 @@ const NOT_OFFERED: Record<LaneKind, Section[]> = {
   note: ['repeat'],
 };
 const SECTION_LABEL: Record<Section, string> = {
-  application: 'funder & stage',
+  application: 'application details',
   due: 'deadline',
   repeat: 'repeat',
   remind: 'reminder',
@@ -71,7 +79,7 @@ const SECTION_LABEL: Record<Section, string> = {
 function hasContent(note: Note, section: Section): boolean {
   switch (section) {
     case 'application':
-      return Boolean(note.stage || note.funder || note.amount);
+      return Boolean(note.appType || note.stage || note.funder || note.amount);
     case 'due':
       return Boolean(note.due);
     case 'repeat':
@@ -119,7 +127,7 @@ export function NoteEditor({ note, lanes, mode, now, onChange, onClose, onAdd, o
   const renderSection = (section: Section): ReactNode => {
     switch (section) {
       case 'application':
-        return <ApplicationFields key={section} note={note} onChange={onChange} />;
+        return <ApplicationFields key={section} note={note} withType={mode === 'edit'} onChange={onChange} />;
       case 'due':
         return (
           <WhenField
@@ -204,11 +212,17 @@ export function NoteEditor({ note, lanes, mode, now, onChange, onClose, onAdd, o
       </header>
 
       <div className="ne-scroll">
+        {mode === 'new' && kind === 'application' && (
+          <fieldset className="ne-section ne-kind">
+            <legend className="ne-label">What kind of application?</legend>
+            <TypePicker note={note} onChange={onChange} />
+          </fieldset>
+        )}
         <div className={`ne-paper paper-${note.color ?? lane?.color ?? 'yellow'}`}>
           <TitleInput
             id={`title-${note.id}`}
             value={note.title}
-            placeholder={template.titlePlaceholder}
+            placeholder={kind === 'application' ? APP_TYPE_INFO[appTypeOf(note)].titlePlaceholder : template.titlePlaceholder}
             onChange={title => onChange({ title })}
           />
           <ColorPicker value={note.color} laneColor={lane?.color} onChange={color => onChange({ color })} />
@@ -349,12 +363,45 @@ function ColorPicker({
   );
 }
 
-function ApplicationFields({ note, onChange }: { note: Note; onChange: (patch: Partial<Note>) => void }) {
+const APP_ICON: Record<AppType, LucideIcon> = {
+  grant: Landmark,
+  job: BriefcaseBusiness,
+  school: GraduationCap,
+  fellowship: Award,
+  other: FileText,
+};
+
+/** Grant, job, school… Switching swaps the starting checklist if it hasn't been touched. */
+function TypePicker({ note, onChange }: { note: Note; onChange: (patch: Partial<Note>) => void }) {
+  const pick = (appType: AppType) => {
+    if (appType === note.appType) return;
+    const swap = isTemplateChecklist(note.checklist, note.appType);
+    onChange(swap ? { appType, checklist: templateChecklist(appType, uid) } : { appType });
+  };
+  return (
+    <div className="seg-group type-group" role="radiogroup" aria-label="Kind of application">
+      {APP_TYPES.map(type => {
+        const Icon = APP_ICON[type];
+        const on = note.appType === type;
+        return (
+          <button key={type} type="button" role="radio" aria-checked={on} className={`seg${on ? ' is-on' : ''}`} onClick={() => pick(type)}>
+            <Icon aria-hidden="true" /> {APP_TYPE_INFO[type].label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ApplicationFields({ note, withType, onChange }: { note: Note; withType: boolean; onChange: (patch: Partial<Note>) => void }) {
+  const info = APP_TYPE_INFO[appTypeOf(note)];
+  const Icon = APP_ICON[appTypeOf(note)];
   return (
     <fieldset className="ne-section">
       <legend className="ne-label">
-        <Landmark aria-hidden="true" /> Application
+        <Icon aria-hidden="true" /> Application
       </legend>
+      {withType && <TypePicker note={note} onChange={onChange} />}
       <div className="seg-group" role="radiogroup" aria-label="Stage">
         {STAGES.map(stage => (
           <button
@@ -365,26 +412,26 @@ function ApplicationFields({ note, onChange }: { note: Note; onChange: (patch: P
             className={`seg${note.stage === stage ? ' is-on' : ''}`}
             onClick={() => onChange({ stage: note.stage === stage ? undefined : stage })}
           >
-            {stage}
+            {stageLabel(stage, note.appType)}
           </button>
         ))}
       </div>
       <div className="ne-row">
         <label className="field" htmlFor={`funder-${note.id}`}>
-          <span className="field-label">Funder</span>
+          <span className="field-label">{info.org}</span>
           <input
             id={`funder-${note.id}`}
             value={note.funder ?? ''}
-            placeholder="e.g. NSF"
+            placeholder={info.orgPlaceholder}
             onChange={e => onChange({ funder: e.target.value || undefined })}
           />
         </label>
         <label className="field" htmlFor={`amount-${note.id}`}>
-          <span className="field-label">Amount</span>
+          <span className="field-label">{info.amount}</span>
           <input
             id={`amount-${note.id}`}
             value={note.amount ?? ''}
-            placeholder="e.g. $50,000"
+            placeholder={info.amountPlaceholder}
             onChange={e => onChange({ amount: e.target.value || undefined })}
           />
         </label>
@@ -703,7 +750,7 @@ function ChecklistField({ items, onChange }: { items: ChecklistItem[]; onChange:
   );
 }
 
-function normalizeUrl(raw: string): string | null {
+export function normalizeUrl(raw: string): string | null {
   const value = raw.trim();
   if (!value) return null;
   try {

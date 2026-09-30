@@ -13,6 +13,7 @@ export const DEFAULT_SETTINGS: Settings = {
   night: { mode: 'auto', start: '22:00', end: '07:00', style: 'dim' },
   // A new board shows the "Connect your phone" code until it's switched off.
   wall: { showConnect: true, chime: true, alertMinutes: 60 },
+  ticker: { show: true, crypto: ['BTC', 'ETH'], stocks: ['AAPL', 'NVDA', 'MSFT', 'GOOGL'], news: ['hn', 'verge'] },
 };
 
 /** A fresh board: the default columns, nothing on them yet. */

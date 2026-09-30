@@ -10,13 +10,14 @@ export type Route =
   | { view: 'wall' }
   | { view: 'demo' }
   | { view: 'login' }
+  | { view: 'remote' }
   | { view: 'editor'; tab: EditorTab; noteId?: string; newKind?: LaneKind; goalId?: string; newGoal?: boolean };
 
 const TABS: EditorTab[] = ['board', 'calendar', 'check', 'display'];
 const KINDS: LaneKind[] = ['application', 'source', 'task', 'routine', 'reminder', 'note'];
 
 export function parseRoute(token: string): Route | null {
-  if (token === 'wall' || token === 'demo' || token === 'login') return { view: token };
+  if (token === 'wall' || token === 'demo' || token === 'login' || token === 'remote') return { view: token };
   if ((TABS as string[]).includes(token)) return { view: 'editor', tab: token as EditorTab };
   if (token.startsWith('note-')) return { view: 'editor', tab: 'board', noteId: token.slice(5) };
   if (token === 'new-goal') return { view: 'editor', tab: 'board', newGoal: true };

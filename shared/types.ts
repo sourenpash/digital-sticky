@@ -7,11 +7,15 @@ export type NoteColor = (typeof NOTE_COLORS)[number];
 export const LANE_KINDS = ['application', 'source', 'task', 'routine', 'reminder', 'note'] as const;
 export type LaneKind = (typeof LANE_KINDS)[number];
 
-export const STAGES = ['Researching', 'Drafting', 'Submitted', 'Awarded', 'Declined'] as const;
+export const STAGES = ['Researching', 'Drafting', 'Submitted', 'Interview', 'Awarded', 'Declined'] as const;
 export type Stage = (typeof STAGES)[number];
 
-/** Stages after which a deadline no longer needs attention. */
-export const FINISHED_STAGES: readonly Stage[] = ['Submitted', 'Awarded', 'Declined'];
+/** Stages after which the deadline no longer needs attention (and that count as submitted). */
+export const FINISHED_STAGES: readonly Stage[] = ['Submitted', 'Interview', 'Awarded', 'Declined'];
+
+/** What an application is for; decides its checklist and wording (see applications.ts). */
+export const APP_TYPES = ['grant', 'job', 'school', 'fellowship', 'other'] as const;
+export type AppType = (typeof APP_TYPES)[number];
 
 export interface Lane {
   id: string;
@@ -59,7 +63,10 @@ export interface Note {
   remindAt?: string;
   /** The `remindAt` the server has already shown (or skipped). Moving the reminder arms it again. */
   remindedFor?: string;
+  /** Applications only. */
+  appType?: AppType;
   stage?: Stage;
+  /** Who the application goes to: funder, company, school… */
   funder?: string;
   amount?: string;
   checklist: ChecklistItem[];
@@ -98,9 +105,21 @@ export type NightMode = (typeof NIGHT_MODES)[number];
 export const NIGHT_STYLES = ['dim', 'clock'] as const;
 export type NightStyle = (typeof NIGHT_STYLES)[number];
 
+/** The ribbon along the bottom of the wall: prices and tech headlines. */
+export interface TickerSettings {
+  show: boolean;
+  /** Coin symbols, e.g. BTC. */
+  crypto: string[];
+  /** Stock symbols, e.g. AAPL. */
+  stocks: string[];
+  /** News sources: ids from NEWS_SOURCES (shared/ticker.ts) or RSS/Atom addresses. */
+  news: string[];
+}
+
 export interface Settings {
   night: { mode: NightMode; start: string; end: string; style: NightStyle };
   wall: { showConnect: boolean; chime: boolean; alertMinutes: number };
+  ticker: TickerSettings;
 }
 
 /** A reminder that has gone off and is showing on the wall. */

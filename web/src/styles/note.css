@@ -51,10 +51,14 @@ button.note:active {
 }
 
 .note-stage {
+  min-width: 0;
+  overflow: hidden;
   font-size: calc(var(--s) * 0.062);
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   opacity: 0.66;
 }
 

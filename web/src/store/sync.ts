@@ -72,6 +72,7 @@ function merge(a: Op, b: Op): Op {
       patch: {
         night: { ...a.patch.night, ...b.patch.night },
         wall: { ...a.patch.wall, ...b.patch.wall },
+        ticker: { ...a.patch.ticker, ...b.patch.ticker },
       },
     };
   }

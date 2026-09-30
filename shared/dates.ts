@@ -1,5 +1,4 @@
 import {
-  addDays,
   differenceInCalendarDays,
   eachDayOfInterval,
   endOfMonth,
@@ -146,19 +145,4 @@ export function reminderLabel(when: When, now: Date): string {
   if (days === 1) return `Tomorrow${time}`;
   if (days > 1 && days < 7) return `${format(when.date, 'EEE')}${time}`;
   return `${format(when.date, 'MMM d')}${time}`;
-}
-
-/** `weeks` weeks starting with the week that contains `now` (Sunday first). */
-export function rollingWeeks(now: Date, weeks: number): CalendarDay[][] {
-  const start = startOfWeek(now);
-  const days = eachDayOfInterval({ start, end: addDays(start, weeks * 7 - 1) }).map(date => ({
-    date,
-    key: dayKey(date),
-    inMonth: isSameMonth(date, now),
-    isToday: isSameDay(date, now),
-    isPast: differenceInCalendarDays(date, now) < 0,
-  }));
-  const rows: CalendarDay[][] = [];
-  for (let i = 0; i < days.length; i += 7) rows.push(days.slice(i, i + 7));
-  return rows;
 }

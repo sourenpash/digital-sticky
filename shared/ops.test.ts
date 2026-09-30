@@ -102,6 +102,12 @@ describe('applyOp', () => {
     expect(order).toEqual(['remind', 'apps', 'check', 'todo', 'routine']);
   });
 
+  it('merges ticker settings without touching the rest', () => {
+    const board = apply(makeEmptyBoard(), { type: 'settings.patch', patch: { ticker: { stocks: ['TSLA'] } } });
+    expect(board.settings.ticker).toMatchObject({ show: true, crypto: ['BTC', 'ETH'], stocks: ['TSLA'] });
+    expect(board.settings.wall.chime).toBe(true);
+  });
+
   it('merges settings without clearing what was not sent', () => {
     const board = apply(makeEmptyBoard(), { type: 'settings.patch', patch: { night: { mode: 'on' }, wall: { chime: false } } });
     expect(board.settings.night).toEqual({ mode: 'on', start: '22:00', end: '07:00', style: 'dim' });

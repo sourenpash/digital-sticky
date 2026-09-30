@@ -22,7 +22,8 @@
 
 /* Form controls (16px text so iPhone Safari doesn't zoom in on focus) */
 .editor :where(input:not([type='checkbox']):not([type='radio']), textarea, select),
-.login :where(input) {
+.login :where(input),
+.remote :where(input) {
   width: 100%;
   min-height: 44px;
   padding: 8px 12px;
@@ -34,7 +35,8 @@
 }
 
 .editor :where(input, textarea, select):focus,
-.login :where(input):focus {
+.login :where(input):focus,
+.remote :where(input):focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
@@ -1226,6 +1228,19 @@
   color: var(--bg);
 }
 
+/* Kind of application: chips with an icon. */
+.type-group .seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.type-group .seg svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
 .ne-when {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) auto;
@@ -2203,6 +2218,63 @@
   font-size: 13px;
 }
 
+/* Ticker symbols */
+.sym-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sym-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sym-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 4px 4px 10px;
+  border-radius: 999px;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.sym-chip button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+}
+
+.sym-chip button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.editor .sym-input {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  max-width: 160px;
+}
+
+.editor .sym-input-wide {
+  max-width: none;
+}
+
 .switch-row {
   display: flex;
   align-items: center;
@@ -2428,3 +2500,234 @@
     background: var(--surface-2);
   }
 }
+
+/* Wall remote: the phone as a touchpad and keyboard for the wall screen. */
+.remote {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-height: 100dvh;
+  padding: max(12px, env(safe-area-inset-top)) 16px max(14px, env(safe-area-inset-bottom));
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.phone-screen .remote {
+  min-height: 0;
+  padding-top: 18px;
+}
+
+.remote-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.remote-head h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 18px;
+}
+
+.remote-status {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.remote-status.is-on {
+  color: var(--good);
+}
+
+.remote-note {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  font-size: 14px;
+}
+
+.pad {
+  position: relative;
+  flex: 1;
+  min-height: 200px;
+  overflow: hidden;
+  border-radius: 22px;
+  background: linear-gradient(160deg, #2e2c29, #1b1a18);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.16);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.pad-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.pad-hint svg {
+  width: 28px;
+  height: 28px;
+  margin-bottom: 4px;
+}
+
+.pad-finger {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+}
+
+.pad-tap {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.09);
+  animation: fade-out 0.35s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes fade-out {
+  to { opacity: 0; }
+}
+
+.remote-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.remote-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.remote-panel.remote-type,
+.remote-type {
+  flex-direction: row;
+  display: flex;
+  gap: 8px;
+}
+
+.remote-type input {
+  flex: 1;
+  min-width: 0;
+}
+
+.remote-keys {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.remote-key {
+  display: grid;
+  place-items: center;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.remote-key svg {
+  width: 18px;
+  height: 18px;
+}
+
+.remote-bar {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.remote-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 2px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.remote-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.remote-btn.is-on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+}
+
+/* The way in, on the Wall tab */
+.remote-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--ink);
+  text-align: left;
+}
+
+.remote-card > svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+
+.remote-card > svg:last-child {
+  width: 18px;
+  height: 18px;
+  color: var(--muted);
+}
+
+.remote-card-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.remote-card-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.remote-card-hint {
+  color: var(--muted);
+  font-size: 13px;
+}
+

@@ -44,7 +44,7 @@ const onPhone = { viewport: phone, scale: 2, mobile: true };
 const nightMode = (style: 'dim' | 'clock') => (api: Api) => api.send('PATCH', '/api/settings', { night: { mode: 'on', style } }).then(() => {});
 const popUpReminder = async (api: Api) => {
   const { board } = (await api.get('/api/state')) as StateResponse;
-  const reminder = board.notes.find(note => note.remindAt);
+  const reminder = board.notes.find(note => note.laneId === 'remind' && note.remindAt);
   if (reminder) await api.send('POST', '/api/alerts', { noteId: reminder.id });
   await api.send('PATCH', '/api/settings', { wall: { showConnect: true } });
 };
@@ -81,6 +81,24 @@ const shots: Shot[] = [
   { keep: true, name: 'wall-night-dim', hash: 'wall', viewport: hd, setup: nightMode('dim') },
   { name: 'wall-night-clock', hash: 'wall', viewport: hd, setup: nightMode('clock') },
   { keep: true, name: 'demo-side-by-side', hash: 'demo', viewport: { width: 1600, height: 1000 } },
+  {
+    keep: true,
+    name: 'demo-remote',
+    hash: 'demo',
+    viewport: { width: 1600, height: 1000 },
+    act: async page => {
+      const phone = page.locator('.phone-screen');
+      await phone.getByRole('button', { name: 'Wall', exact: true }).click();
+      await phone.getByRole('button', { name: /Control the wall screen/ }).click();
+      const pad = await phone.locator('.pad').boundingBox();
+      if (!pad) throw new Error('no touchpad');
+      await page.mouse.move(pad.x + pad.width * 0.3, pad.y + pad.height * 0.5);
+      await page.mouse.down();
+      for (let i = 1; i <= 12; i++) await page.mouse.move(pad.x + pad.width * (0.3 + i * 0.02), pad.y + pad.height * (0.5 + i * 0.012));
+      await page.mouse.up();
+      await page.waitForTimeout(150);
+    },
+  },
   { keep: true, name: 'phone-board', hash: 'board', ...onPhone },
   { name: 'phone-board-dark', hash: 'board', ...onPhone, colorScheme: 'dark' },
   { name: 'phone-first-day', hash: 'board', ...onPhone, empty: true },
@@ -100,12 +118,25 @@ const shots: Shot[] = [
     },
   },
   {
+    keep: true,
     name: 'phone-new-application',
     hash: 'board',
     ...onPhone,
     act: async page => {
       await openAdd(page);
-      await page.getByRole('button', { name: /Funding application/ }).click();
+      await page.getByRole('button', { name: /^Application/ }).click();
+      await page.getByRole('radio', { name: 'Job' }).click();
+      await page.locator('.ne-scroll').evaluate(el => el.scrollTo(0, 0));
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    keep: true,
+    name: 'phone-job',
+    hash: 'board',
+    ...onPhone,
+    act: async page => {
+      await page.getByRole('button', { name: /Research Scientist/ }).first().click();
       await page.waitForTimeout(400);
     },
   },
@@ -124,6 +155,17 @@ const shots: Shot[] = [
   { name: 'phone-calendar', hash: 'calendar', ...onPhone },
   { name: 'phone-to-check', hash: 'check', ...onPhone },
   { keep: true, name: 'phone-wall-settings', hash: 'display', ...onPhone, act: showSetting('Columns') },
+  { keep: true, name: 'phone-ticker-settings', hash: 'display', ...onPhone, act: showSetting('Ticker') },
+  { keep: true, name: 'phone-remote', hash: 'remote', ...onPhone },
+  {
+    name: 'phone-remote-keyboard',
+    hash: 'remote',
+    ...onPhone,
+    act: async page => {
+      await page.getByRole('button', { name: 'Keyboard' }).click();
+      await page.waitForTimeout(300);
+    },
+  },
   { keep: true, name: 'desktop-board', hash: 'board', viewport: desktop, act: openNsf },
   { name: 'desktop-goal', hash: 'board', viewport: desktop, act: openGoal },
   { name: 'desktop-board-closed', hash: 'board', viewport: desktop },
@@ -172,7 +214,7 @@ try {
     const page = await context.newPage();
     page.on('pageerror', err => console.error(`[${shot.name}] page error:`, err.message));
     await page.goto(`${base}/?now=${NOW}#${shot.hash}`);
-    await page.locator('.wall, .editor, .demo').first().waitFor();
+    await page.locator('.wall, .editor, .demo, .remote').first().waitFor();
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(700);
     if (shot.act) await shot.act(page, server);

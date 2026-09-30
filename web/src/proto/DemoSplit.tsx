@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Board } from '../../../shared/types.ts';
 import { EditorApp, type EditorRoute } from '../editor/EditorApp.tsx';
 import { Login } from '../editor/Login.tsx';
+import { RemoteScreen } from '../editor/RemoteScreen.tsx';
 import { parseRoute } from '../lib/route.ts';
 import { Wall } from '../wall/Wall.tsx';
 
@@ -27,12 +28,18 @@ export function DemoSplit({ board, now, connectUrl }: { board: Board; now: Date;
       <div className="demo-stage">
         <div className="phone-frame">
           <div className="phone-screen">
-            {route?.view === 'login' ? <Login onUnlock={() => setToken('board')} /> : <EditorApp route={editorRoute} go={setToken} />}
+            {route?.view === 'login' ? (
+              <Login onUnlock={() => setToken('board')} />
+            ) : route?.view === 'remote' ? (
+              <RemoteScreen go={setToken} preview />
+            ) : (
+              <EditorApp route={editorRoute} go={setToken} />
+            )}
           </div>
         </div>
         <figure className="demo-wall">
           <div className="monitor">
-            <Wall board={board} now={now} connectUrl={connectUrl} />
+            <Wall board={board} now={now} connectUrl={connectUrl} cursor />
           </div>
           <figcaption>The bedroom wall screen, scaled down</figcaption>
         </figure>

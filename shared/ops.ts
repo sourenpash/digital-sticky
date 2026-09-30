@@ -16,6 +16,7 @@ export type GoalPatch = Patch<Omit<Goal, 'id' | 'createdAt'>>;
 export interface SettingsPatch {
   night?: Partial<Settings['night']>;
   wall?: Partial<Settings['wall']>;
+  ticker?: Partial<Settings['ticker']>;
 }
 
 export type Op =
@@ -196,6 +197,7 @@ export function applyOp(board: Board, op: ServerOp, now: Date): Board {
         settings: {
           night: { ...board.settings.night, ...definedOnly(op.patch.night) },
           wall: { ...board.settings.wall, ...definedOnly(op.patch.wall) },
+          ticker: { ...board.settings.ticker, ...definedOnly(op.patch.ticker) },
         },
       };
 

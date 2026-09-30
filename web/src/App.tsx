@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { EditorApp } from './editor/EditorApp.tsx';
 import { Login } from './editor/Login.tsx';
+import { RemoteScreen } from './editor/RemoteScreen.tsx';
 import { useNow } from './lib/now.ts';
 import { navigate, parseRoute, useHashToken, type Route } from './lib/route.ts';
 import { DemoSplit } from './proto/DemoSplit.tsx';
@@ -61,6 +62,9 @@ export function App() {
         break;
       case 'login':
         screen = <Login onUnlock={() => navigate('board')} />;
+        break;
+      case 'remote':
+        screen = <RemoteScreen go={navigate} />;
         break;
       default:
         screen = <EditorApp route={route} go={navigate} />;

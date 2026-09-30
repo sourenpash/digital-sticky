@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import type { Board } from '../../../shared/types.ts';
-import { CalendarPanel } from './CalendarPanel.tsx';
 import { ConnectCard } from './ConnectCard.tsx';
 import { NightClock } from './NightClock.tsx';
 import { ReminderBanner } from './ReminderBanner.tsx';
+import { Ticker } from './Ticker.tsx';
+import { TwoWeeks } from './TwoWeeks.tsx';
+import { WallCursor } from './WallCursor.tsx';
 import { UpcomingList } from './UpcomingList.tsx';
 import { WallColumns } from './WallColumns.tsx';
 import { WallHeader } from './WallHeader.tsx';
@@ -21,7 +23,7 @@ interface Box {
  * and every size in wall.css is a multiple of it, so it looks the same on a 1080p
  * monitor, a 4K monitor, or the small preview in the editor.
  */
-export function Wall({ board, now, connectUrl }: { board: Board; now: Date; connectUrl: string | null }) {
+export function Wall({ board, now, connectUrl, cursor = false }: { board: Board; now: Date; connectUrl: string | null; cursor?: boolean }) {
   const frameRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<Box | null>(null);
   const mode = wallMode(board.settings, now);
@@ -67,14 +69,16 @@ export function Wall({ board, now, connectUrl }: { board: Board; now: Date; conn
               <div className="wall-main">
                 <WallColumns lanes={board.lanes} notes={board.notes} now={now} u={box.u} />
                 <aside className="wall-side">
-                  <CalendarPanel notes={board.notes} lanes={board.lanes} now={now} />
-                  <UpcomingList notes={board.notes} now={now} max={connect ? 4 : 8} />
+                  <UpcomingList notes={board.notes} now={now} max={connect ? 5 : 10} />
                   {connect && <ConnectCard url={connect} />}
                 </aside>
               </div>
+              <TwoWeeks notes={board.notes} lanes={board.lanes} now={now} />
+              {mode === 'day' && board.settings.ticker.show && <Ticker settings={board.settings.ticker} u={box.u} />}
             </>
           )}
           <ReminderBanner alerts={board.alerts} notes={board.notes} />
+          {cursor && <WallCursor />}
         </div>
       )}
     </div>

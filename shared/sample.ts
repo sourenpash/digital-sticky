@@ -1,5 +1,5 @@
 import { addDays, addMonths, endOfMonth, format, getDay, set, startOfDay, startOfWeek } from 'date-fns';
-import { DEFAULT_LANES } from './defaults.ts';
+import { DEFAULT_LANES, DEFAULT_SETTINGS } from './defaults.ts';
 import type { Board, ChecklistItem, Goal, Note, SourceLink } from './types.ts';
 
 // Sample board for the preview page and `npm run demo`. Dates are relative to "now"
@@ -43,6 +43,7 @@ export function makeSampleBoard(now: Date): Board {
     note(
       {
         laneId: 'apps',
+        appType: 'grant',
         title: 'NSF CAREER proposal',
         funder: 'NSF',
         amount: '$500,000',
@@ -67,6 +68,7 @@ export function makeSampleBoard(now: Date): Board {
     note(
       {
         laneId: 'apps',
+        appType: 'grant',
         title: 'NIH R01 resubmission',
         funder: 'NIH',
         amount: '$1.2M over 5 yrs',
@@ -84,6 +86,7 @@ export function makeSampleBoard(now: Date): Board {
     note(
       {
         laneId: 'apps',
+        appType: 'grant',
         title: 'Gates Grand Challenges',
         funder: 'Gates Foundation',
         amount: '$100,000',
@@ -99,6 +102,28 @@ export function makeSampleBoard(now: Date): Board {
     note(
       {
         laneId: 'apps',
+        appType: 'job',
+        title: 'Research Scientist',
+        funder: 'Allen Institute',
+        amount: '$120k',
+        stage: 'Interview',
+        due: dateOnly(day(-9)),
+        remindAt: at(day(6), 14),
+        body: 'Video interview with the hiring panel. Prepare a 10-minute research talk.',
+        checklist: items([
+          ['Tailor CV / résumé', true],
+          ['Cover letter', true],
+          ['References', true],
+          ['Submit', true],
+          ['Follow up', false],
+        ]),
+      },
+      18,
+    ),
+    note(
+      {
+        laneId: 'apps',
+        appType: 'grant',
         title: 'City arts micro-grant',
         funder: 'City Arts Council',
         amount: '$2,500',
@@ -110,6 +135,7 @@ export function makeSampleBoard(now: Date): Board {
     note(
       {
         laneId: 'apps',
+        appType: 'grant',
         title: 'Dept. travel grant',
         funder: 'Graduate School',
         amount: '$1,500',
@@ -260,6 +286,7 @@ export function makeSampleBoard(now: Date): Board {
       // defaults to 'auto' (10 PM–7 AM).
       night: { mode: 'off', start: '22:00', end: '07:00', style: 'dim' },
       wall: { showConnect: false, chime: true, alertMinutes: 60 },
+      ticker: structuredClone(DEFAULT_SETTINGS.ticker),
     },
     alerts: [],
   };

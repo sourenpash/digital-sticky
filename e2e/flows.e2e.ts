@@ -56,7 +56,7 @@ describe('everyday flows', () => {
 
     await phone.getByRole('button', { name: /NIH R01 resubmission/ }).click();
     await phone.getByRole('radio', { name: 'Submitted' }).click();
-    await expect.poll(text(wall.locator('.wall-goal', { hasText: 'Submit 5' }).locator('.wall-goal-value'))).toBe('3 of 5');
+    await expect.poll(text(wall.locator('.wall-goal', { hasText: 'Submit 5' }).locator('.wall-goal-value'))).toBe('4 of 5');
     // Typing goes out after a short pause, as one change.
     await phone.getByLabel('Title').fill('NIH R01 (resubmitted)');
     await expect.poll(count(wall.locator('.note', { hasText: 'NIH R01 (resubmitted)' }))).toBe(1);
@@ -99,6 +99,43 @@ describe('everyday flows', () => {
     await expect.poll(count(column('Recurring').locator('.note', { hasText: 'Update CV' }))).toBe(1);
     await phone.locator('.toast', { hasText: 'Moved to Recurring' }).getByRole('button', { name: 'Undo' }).click();
     await expect.poll(count(column('To-do').locator('.note', { hasText: 'Update CV' }))).toBe(1);
+  });
+
+  it('adds a job application with its own checklist; the wall tags it and puts it in the calendar', async () => {
+    const wall = await h.open('wall', 'wall');
+    const phone = await h.open('phone', 'board');
+
+    await phone.getByRole('button', { name: 'Add a note' }).click();
+    await phone.getByRole('button', { name: /^Application/ }).click();
+    await phone.getByRole('radio', { name: 'Job' }).click();
+    await phone.getByRole('checkbox', { name: 'Cover letter' }).waitFor();
+    expect(await phone.getByRole('checkbox', { name: 'Budget' }).count()).toBe(0);
+    await phone.getByLabel('Title').fill('Data Scientist');
+    await phone.getByLabel('Company').fill('Acme Labs');
+    await phone.getByRole('dialog').getByRole('button', { name: 'Tomorrow', exact: true }).click();
+    await phone.getByRole('dialog').getByRole('button', { name: 'Add to board' }).click();
+
+    const square = wall.locator('.note', { hasText: 'Data Scientist' });
+    await expect.poll(() => square.locator('.note-stage').textContent()).toBe('Job · Researching');
+    await expect.poll(text(wall.locator('.wall-wk-day').nth(1))).toContain('Data Scientist');
+    const saved = await h.saved();
+    expect(saved.board.notes.find(note => note.title === 'Data Scientist')).toMatchObject({ appType: 'job', funder: 'Acme Labs', stage: 'Researching' });
+  });
+
+  it('changes what the ticker shows from the phone', async () => {
+    const wall = await h.open('wall', 'wall');
+    const phone = await h.open('phone', 'display');
+
+    await phone.getByLabel('New stocks symbol').fill('tsla');
+    await phone.getByRole('button', { name: 'Add to stocks' }).click();
+    await expect.poll(count(wall.locator('.wall-ticker .tk-sym', { hasText: 'TSLA' }))).toBeGreaterThan(0);
+    await phone.getByRole('button', { name: 'Remove BTC' }).click();
+    await expect.poll(count(wall.locator('.wall-ticker .tk-sym', { hasText: 'BTC' }))).toBe(0);
+    await phone.getByRole('switch', { name: /Show prices and tech news/ }).click();
+    await expect.poll(count(wall.locator('.wall-ticker'))).toBe(0);
+
+    const saved = await h.saved();
+    expect(saved.board.settings.ticker).toMatchObject({ show: false, crypto: ['ETH'], stocks: ['AAPL', 'NVDA', 'MSFT', 'GOOGL', 'TSLA'] });
   });
 
   it('deletes a note and brings it back with Undo', async () => {

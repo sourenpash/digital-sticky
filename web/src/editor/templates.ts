@@ -1,4 +1,4 @@
-import { Bell, Landmark, ListTodo, Repeat, SearchCheck, StickyNote as StickyNoteIcon, type LucideIcon } from 'lucide-react';
+import { Bell, FileText, ListTodo, Repeat, SearchCheck, StickyNote as StickyNoteIcon, type LucideIcon } from 'lucide-react';
 import type { LaneKind, NoteColor } from '../../../shared/types.ts';
 
 export interface Template {
@@ -16,10 +16,10 @@ export const TEMPLATES: Template[] = [
   {
     kind: 'application',
     short: 'application',
-    title: 'Funding application',
-    hint: 'Funder, amount, deadline and a checklist',
-    titlePlaceholder: 'Name of the grant or fund',
-    icon: Landmark,
+    title: 'Application',
+    hint: 'Grant, job, school, fellowship — anything with a deadline',
+    titlePlaceholder: 'What are you applying for?',
+    icon: FileText,
     color: 'yellow',
   },
   {

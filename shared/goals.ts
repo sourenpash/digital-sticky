@@ -1,5 +1,6 @@
 import { differenceInCalendarDays, format, isValid, parseISO } from 'date-fns';
 import { parseWhen } from './dates.ts';
+import { countsAsWinnings } from './applications.ts';
 import { FINISHED_STAGES, type Goal, type Note } from './types.ts';
 
 const NUMBER = String.raw`(\d[\d,]*(?:\.\d+)?)\s*(k|m|mil|million|thousand|b|bn|billion)?\b`;
@@ -35,7 +36,7 @@ export function goalValue(goal: Goal, notes: Note[]): number {
       return notes.filter(note => note.stage !== undefined && FINISHED_STAGES.includes(note.stage)).length;
     case 'won':
       return notes
-        .filter(note => note.stage === 'Awarded')
+        .filter(countsAsWinnings)
         .reduce((sum, note) => sum + (parseAmount(note.amount) ?? 0), 0);
     case 'count':
       return goal.count;

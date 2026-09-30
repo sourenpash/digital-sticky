@@ -1,29 +1,30 @@
 # Digital Sticky
 
-A sticky-note wall for a bedroom monitor. It shows colored squares for funding applications, sources to double-check, to-dos, recurring tasks and reminders, next to a calendar, deadline countdowns and progress bars for your goals. You edit it from your iPhone or any computer's browser, and the wall updates live.
+A sticky-note wall for a bedroom monitor. It shows colored squares for applications (grants, jobs, schools, fellowships), sources to double-check, to-dos, recurring tasks and reminders, with a two-week calendar, deadline countdowns, progress bars for your goals and a ticker of prices and tech news. You edit it from your iPhone or any computer's browser, and the wall updates live.
 
 ![The wall screen](docs/screenshots/wall-day.png)
 
-## Status: checkpoint 2, real data and live sync
+## Status: checkpoint 3, new wall and phone screens
 
-The board is now real. A small server on the wall computer saves it to disk, and every phone, computer and the wall screen stay in sync:
+This step adds the screens asked for after checkpoint 2. Some are complete; the rest show placeholder data until the step that connects them:
 
-- **Live updates.** A change on your phone shows on the wall within a moment (usually well under a second), and on every other open phone or computer.
-- **Saved safely.** The board lives in `data/board.json`. Every save goes to a temporary file first and then replaces the old one, so a power cut can't leave half a file. The first save of each day keeps a copy of the day before in `data/backups/` (the last 30 days).
-- **Undo works from any device.** Deleted notes, goals and columns wait in a trash for 30 days, so the Undo button always works.
-- **Works through Wi-Fi hiccups.** Changes show instantly on the device you're using and are sent in the background. If the connection drops, they wait (the badge says "Offline · 1 waiting") and go through when it's back. iPhones reconnect by themselves when you come back to the page.
-- **Columns** can be added (choose what goes in them), renamed, recolored, reordered and deleted, from the Wall tab.
-- **On a computer**, drag a square to another column. Dragging into Recurring makes a note repeat; dragging out makes it a one-off again.
-- **Download a backup** of everything from the Wall tab, and **Reload the wall** remotely if it ever looks stuck.
+- **Two-week calendar on the wall.** The month grid with dots is replaced by a strip along the bottom showing today and the next 13 days, with the actual deadlines and reminders written into each day. Busy days are tinted warmer, deadlines within three days are outlined, and overdue ones sit on today in red. "Coming up" keeps its countdowns on the right.
+- **Applications of any kind.** A new application starts by picking what kind it is: grant or funding, job, school or program, fellowship or residency, or other. Each kind starts with its own checklist and uses its own words: a job has a company and a salary, and its good outcome is an "Offer"; a school's is "Accepted". Squares show the kind in small print ("JOB · INTERVIEW"); grants just show the stage. There's a new stage between Submitted and the result: "Interview" (grants and others call it "Shortlisted"). Once an application is submitted its deadline stops counting down, but a reminder you set, such as for the interview, still shows. "Money won" goals count awarded grants and fellowships, not job salaries.
+- **Ticker (placeholder prices).** A ribbon along the bottom edge of the wall slides slowly through crypto and stock prices and tech headlines. It hides at night. Pick the coins, stocks and news sources (Hacker News, The Verge, Ars Technica, TechCrunch, or any RSS feed) under Wall → Ticker. For now it shows made-up values marked "Sample"; live ones come in checkpoint 4.
+- **Phone remote (screen only).** Wall → Control the wall screen opens a touchpad and keyboard for the wall: drag to move the cursor, tap to click, two fingers to scroll, plus Back, Board, Reload and Open a website. On the side-by-side preview page it moves a cursor over the wall. It starts working for real in checkpoint 5, when the wall computer is set up.
+- **Reminders go off by themselves.** At the time you set, a reminder pops up on the wall and goes away after an hour. After a restart, the board catches up on reminders missed by less than a day.
+
+Still true from checkpoint 2: the board is saved on the wall computer (with daily backups and a 30-day trash for Undo), every screen updates live, and changes made offline are sent when the connection is back.
 
 | Checkpoint | What it adds | Status |
 | --- | --- | --- |
 | 1 | Clickable prototype of the wall, phone and computer screens, with placeholder data | Done |
-| 2 | Real data and live sync: a small server on the wall computer that saves the board to disk | Ready for review |
-| 3 | Reminders on a timer, night-mode polish, PIN protection, add to Home Screen | Next |
-| 4 | One-command install on the Intel NUC: auto-start and the full-screen wall | Planned |
+| 2 | Real data and live sync: a small server on the wall computer that saves the board to disk | Done |
+| 3 | Two-week calendar, application types, ticker and phone remote screens; reminders on a timer | Ready for review |
+| 4 | Reminders on your phone, PIN protection, add to Home Screen, wall polish, live ticker prices and headlines | Next |
+| 5 | Remote control of the wall from your phone, and a one-command install on the Intel NUC | Planned |
 
-Until checkpoint 3 adds the PIN, anyone on your Wi-Fi who knows the address can open and change the board.
+Until checkpoint 4 adds the PIN, anyone on your Wi-Fi who knows the address can open and change the board.
 
 ## Try it on any computer at home
 
@@ -64,13 +65,19 @@ Put any of these in a `.env` file next to `package.json` (or set them in the env
 
 ## Screenshots
 
-| Phone and wall side by side | The wall on day one |
+| Phone and wall side by side | The phone as a remote for the wall |
 | --- | --- |
-| ![Side by side](docs/screenshots/demo-side-by-side.png) | ![A new board](docs/screenshots/wall-first-day.png) |
+| ![Side by side](docs/screenshots/demo-side-by-side.png) | ![Remote](docs/screenshots/demo-remote.png) |
+
+| New application: what kind? | A job application | Ticker settings | Wall remote |
+| --- | --- | --- | --- |
+| ![New application](docs/screenshots/phone-new-application.png) | ![Job application](docs/screenshots/phone-job.png) | ![Ticker settings](docs/screenshots/phone-ticker-settings.png) | ![Remote](docs/screenshots/phone-remote.png) |
 
 | Phone board | A goal | A recurring task | Editing a note | Columns and backups |
 | --- | --- | --- | --- | --- |
 | ![Phone board](docs/screenshots/phone-board.png) | ![Goal form](docs/screenshots/phone-goal.png) | ![Recurring task](docs/screenshots/phone-recurring.png) | ![Note form](docs/screenshots/phone-note.png) | ![Wall settings](docs/screenshots/phone-wall-settings.png) |
+
+![The wall on day one](docs/screenshots/wall-first-day.png)
 
 ![On a computer](docs/screenshots/desktop-board.png)
 
@@ -98,7 +105,8 @@ The API, for scripts (and later, an AI assistant):
 | `POST /api/notes/:id/completions` | Recurring tasks: `{"add": [time]}` or `{"remove": [time]}` |
 | `POST /api/lanes`, `PATCH`/`DELETE /api/lanes/:id`, `PUT /api/lanes/order` | Columns |
 | `POST /api/goals`, `PATCH`/`DELETE /api/goals/:id` | Goals |
-| `PATCH /api/settings` | Night mode and wall settings |
+| `PATCH /api/settings` | Night mode, wall and ticker settings |
+| `POST /api/alerts`, `DELETE /api/alerts/:id` | Pop a note's reminder up on the wall now, and take it down |
 | `GET /api/export` | Download everything, trash included |
 
 Changes must be sent as JSON (`Content-Type: application/json`).

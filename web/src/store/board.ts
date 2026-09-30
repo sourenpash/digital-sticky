@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { templateChecklist } from '../../../shared/applications.ts';
 import { lanesInOrder } from '../../../shared/board.ts';
 import { DEFAULT_SETTINGS } from '../../../shared/defaults.ts';
 import type { GoalPatch, LanePatch, NotePatch, SettingsPatch } from '../../../shared/ops.ts';
@@ -43,7 +44,7 @@ const TYPING_MS = 600;
 const TEXT_FIELDS = new Set(['title', 'body', 'funder', 'amount']);
 
 const NOTE_FIELDS = [
-  'laneId', 'title', 'body', 'color', 'due', 'remindAt', 'stage', 'funder', 'amount',
+  'laneId', 'title', 'body', 'color', 'due', 'remindAt', 'appType', 'stage', 'funder', 'amount',
   'checklist', 'links', 'repeat', 'completions', 'pinned', 'done', 'doneAt',
 ] as const;
 
@@ -219,9 +220,11 @@ export const board = {
     const patch: SettingsPatch = {};
     const night = diff(before.night, after.night);
     const wall = diff(before.wall, after.wall);
+    const ticker = diff(before.ticker, after.ticker);
     if (Object.keys(night).length) patch.night = night;
     if (Object.keys(wall).length) patch.wall = wall;
-    if (patch.night || patch.wall) engine.dispatch({ type: 'settings.patch', patch });
+    if (Object.keys(ticker).length) patch.ticker = ticker;
+    if (patch.night || patch.wall || patch.ticker) engine.dispatch({ type: 'settings.patch', patch });
   },
 
   addLane(title: string, kind: LaneKind = 'note'): void {
@@ -299,8 +302,6 @@ export function useSync(): SyncState {
   return useSyncExternalStore(engine.subscribe, engine.getState);
 }
 
-const APPLICATION_CHECKLIST = ['Confirm eligibility', 'Budget', 'Narrative / statement', 'Letters of support', 'Submit'];
-
 /** A blank note for the "Add" templates; it joins the board only when the user taps Add. */
 export function draftNote(kind: LaneKind, lanes: Lane[]): Note {
   const lane =
@@ -318,13 +319,7 @@ export function draftNote(kind: LaneKind, lanes: Lane[]): Note {
     createdAt: now,
     updatedAt: now,
   };
-  if (kind === 'application') {
-    return {
-      ...blank,
-      stage: 'Researching',
-      checklist: APPLICATION_CHECKLIST.map(text => ({ id: uid(), text, done: false })),
-    };
-  }
+  if (kind === 'application') return { ...blank, appType: 'grant', stage: 'Researching', checklist: templateChecklist('grant', uid) };
   if (kind === 'routine') return { ...blank, repeat: { every: 'week', times: 1 }, completions: [] };
   return blank;
 }

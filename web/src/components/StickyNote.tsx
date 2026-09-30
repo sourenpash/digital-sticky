@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { Bell, Check, Link2, Pin, Repeat } from 'lucide-react';
+import { applicationKicker } from '../../../shared/applications.ts';
 import { checklistProgress, noteColor, unverifiedCount } from '../../../shared/board.ts';
 import { describeRepeat, repeatStatus, weekDots } from '../../../shared/recurring.ts';
 import type { Lane, Note } from '../../../shared/types.ts';
@@ -68,7 +69,7 @@ export function StickyNote({ note, lane, now, size, compact, onOpen, selected }:
       : null;
   const dots = routine?.every === 'day' ? weekDots(note, now) : null;
   const toCheck = unverifiedCount(note);
-  const kicker = note.done ? undefined : note.repeat ? describeRepeat(note.repeat) : note.stage;
+  const kicker = note.done ? undefined : note.repeat ? describeRepeat(note.repeat) : applicationKicker(note);
   const meta = [note.amount, note.funder].filter(Boolean).join(' · ');
   const tier = tierOf(note.title);
   const lines = titleLines(tier, Boolean(compact), { meta: Boolean(meta), dots: Boolean(dots), flags: Boolean(bar) || toCheck > 0, chip: Boolean(chip) });
