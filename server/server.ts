@@ -1,4 +1,5 @@
 import { serve, type ServerType } from '@hono/node-server';
+import { execFile } from 'node:child_process';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { Board } from '../shared/types.ts';
@@ -35,6 +36,16 @@ export interface StartOptions {
   tickerFetch?: Fetcher | false;
   /** The wall browser's debugging port on 127.0.0.1, for the phone remote; none turns the remote off. */
   remoteDebugPort?: number | null;
+  /** The script that runs the wall screen (scripts/linux/kiosk.sh), for "Exit to desktop"; none turns that off. */
+  kioskScript?: string | null;
+}
+
+/** Closes the wall screen with its script (`kiosk.sh --stop`), so the desktop shows. */
+function kioskCloser(script: string): () => Promise<void> {
+  return () =>
+    new Promise((resolve, reject) => {
+      execFile('bash', [script, '--stop'], { timeout: 10_000 }, error => (error ? reject(error) : resolve()));
+    });
 }
 
 export interface RunningServer {
@@ -72,6 +83,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     allowedHosts: options.allowedHosts,
     ticker,
     remote,
+    closeWall: options.kioskScript ? kioskCloser(options.kioskScript) : null,
   });
 
   const server = await new Promise<Server>((resolve, reject) => {

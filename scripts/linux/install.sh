@@ -194,6 +194,20 @@ X-GNOME-Autostart-enabled=true
 X-GNOME-Autostart-Delay=3
 DESKTOP
 ok "Starts at login ($AUTOSTART_FILE)"
+# An app to bring it back after "Exit to desktop" (it's in the dock and the app list).
+mkdir -p "$(dirname "$LAUNCHER_FILE")"
+cat >"$LAUNCHER_FILE" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=Sticky Wall
+Comment=Shows the wall screen full screen
+Exec="$APP_DIR/scripts/linux/kiosk.sh"
+Icon=$APP_DIR/web/public/icon-512.png
+Terminal=false
+Categories=Utility;
+StartupWMClass=$LAUNCHER_ID
+DESKTOP
+ok "The Sticky Wall app opens it again ($LAUNCHER_FILE)"
 
 # --- 7. Screen settings -----------------------------------------------------------
 
@@ -218,6 +232,15 @@ if command -v gsettings >/dev/null 2>&1 && [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" 
   # No "not responding" box over the wall while a page is busy for a moment.
   gset org.gnome.mutter check-alive-timeout 0
   ok "The screen never blanks, locks or sleeps, and notifications don't pop up over the wall"
+  # The Sticky Wall app in the dock (after the ones already there).
+  favorites=$(gsettings get org.gnome.shell favorite-apps 2>/dev/null || true)
+  if [[ $favorites == *"]" && $favorites != *"'$LAUNCHER_ID.desktop'"* ]]; then
+    if [[ $favorites == *"[]" ]]; then favorites="['$LAUNCHER_ID.desktop']"; else favorites="${favorites%]}, '$LAUNCHER_ID.desktop']"; fi
+    gset org.gnome.shell favorite-apps "$favorites"
+  fi
+  if [[ $(gsettings get org.gnome.shell favorite-apps 2>/dev/null || true) == *"'$LAUNCHER_ID.desktop'"* ]]; then
+    ok "Sticky Wall is in the dock: it brings the wall back after \"Exit to desktop\""
+  fi
 else
   warn "Skipped: run this in a terminal on the wall computer's desktop to turn off screen blanking."
 fi

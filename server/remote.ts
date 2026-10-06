@@ -1,4 +1,4 @@
-import { REMOTE_FIELDS, REMOTE_WALL_WIDTH, type RemoteCommand, type RemoteField, type RemoteKey, type RemoteStatus, type RemoteUnavailableReason } from '../shared/remote.ts';
+import { REMOTE_CURSOR_ID, REMOTE_FIELDS, REMOTE_WALL_WIDTH, type RemoteCommand, type RemoteField, type RemoteKey, type RemoteStatus, type RemoteUnavailableReason } from '../shared/remote.ts';
 import { Cdp, CdpTimeout, type CdpEvent } from './cdp.ts';
 
 // The phone remote: carries out touchpad moves, taps, typing and a few buttons in the
@@ -65,12 +65,12 @@ function isTab(info: TargetInfo): boolean {
  * allow), and in the top layer so it stays above full-screen video and pop-up dialogs.
  */
 const PAGE_SCRIPT = `function (x, y, mode) {
-  var doc = document, host = doc.getElementById('__sticky_wall_cursor__');
+  var doc = document, host = doc.getElementById('${REMOTE_CURSOR_ID}');
   if (mode > 0 && doc.documentElement) {
     if (host && !host.__sticky) { host.remove(); host = null; }
     if (!host) {
       host = doc.createElement('div');
-      host.id = '__sticky_wall_cursor__';
+      host.id = '${REMOTE_CURSOR_ID}';
       host.style.cssText = 'all:initial !important;display:block !important;position:fixed !important;inset:auto !important;left:0 !important;top:0 !important;width:0 !important;height:0 !important;margin:0 !important;padding:0 !important;border:0 !important;background:none !important;overflow:visible !important;z-index:2147483647 !important;pointer-events:none !important;visibility:visible !important;transition:opacity .4s !important;opacity:0';
       if (host.showPopover) host.setAttribute('popover', 'manual');
       var root = host.attachShadow ? host.attachShadow({ mode: 'closed' }) : host;

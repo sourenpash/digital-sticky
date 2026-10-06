@@ -3,7 +3,6 @@ import { ChevronDown, FlaskConical } from 'lucide-react';
 import { navigate } from '../lib/route.ts';
 import { board, useBoard } from '../store/board.ts';
 import { applyPreset } from './presets.ts';
-import { proto, useProto } from './protoState.ts';
 
 const VIEWS = [
   { token: 'demo', label: 'Side by side' },
@@ -16,7 +15,6 @@ const VIEWS = [
 export function ProtoBar({ current }: { current: string }) {
   const [open, setOpen] = useState(false);
   const data = useBoard();
-  const { titleFont } = useProto();
   const { mode, style } = data.settings.night;
   const nightState = mode === 'off' ? 'day' : mode === 'on' ? style : 'auto';
 
@@ -62,17 +60,6 @@ export function ProtoBar({ current }: { current: string }) {
               </button>
               <button type="button" className={data.settings.wall.showConnect ? 'is-on' : ''} onClick={() => board.updateSettings(s => ({ ...s, wall: { ...s.wall, showConnect: !s.wall.showConnect } }))}>
                 Phone QR code
-              </button>
-            </div>
-          </div>
-          <div className="proto-group">
-            <span className="proto-label">Note writing</span>
-            <div className="proto-options">
-              <button type="button" className={titleFont === 'marker' ? 'is-on' : ''} onClick={() => proto.set({ titleFont: 'marker' })}>
-                Marker
-              </button>
-              <button type="button" className={titleFont === 'clean' ? 'is-on' : ''} onClick={() => proto.set({ titleFont: 'clean' })}>
-                Clean
               </button>
             </div>
           </div>

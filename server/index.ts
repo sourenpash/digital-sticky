@@ -31,6 +31,9 @@ function readBuildId(): string {
   }
 }
 
+// The wall screen's script, for its "Exit to desktop" button.
+const kioskScript = resolve('scripts/linux/kiosk.sh');
+
 // For the message below; screens get it fresh each time (at boot the network may not have an address yet).
 const connectUrl = connectUrlFor(config);
 let running;
@@ -49,6 +52,7 @@ try {
     trustLocalhost: config.trustLocalhost,
     allowedHosts: config.allowedHosts,
     remoteDebugPort: config.kioskDebugPort,
+    kioskScript: process.platform === 'linux' && existsSync(kioskScript) ? kioskScript : null,
   });
 } catch (error) {
   const code = (error as NodeJS.ErrnoException).code;

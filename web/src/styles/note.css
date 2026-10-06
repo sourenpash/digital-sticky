@@ -75,7 +75,7 @@ button.note:active {
   flex: none;
   margin-top: calc(var(--s) * 0.025);
   overflow: hidden;
-  font-family: var(--font-title);
+  font-family: var(--font-ui);
   font-size: calc(var(--s) * 0.118);
   font-weight: 650;
   line-height: 1.12;

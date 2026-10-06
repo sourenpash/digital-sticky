@@ -98,7 +98,6 @@ button {
   background: #1b1916;
   color: #f4efe6;
   font-size: clamp(16px, 2vw, 40px);
-  cursor: none;
 }
 
 .boot.is-wall .boot-hint {

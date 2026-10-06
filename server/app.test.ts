@@ -222,6 +222,27 @@ describe('API', () => {
     expect(await refused.json()).toEqual({ error: 'That address can’t be opened on the wall' });
   });
 
+  it('closes the wall screen, but only for the wall computer itself', async () => {
+    const closeAt = (address: string, url = 'http://localhost:3000/api/wall/close') =>
+      app.request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }, { incoming: { socket: { remoteAddress: address } } });
+    expect((await closeAt('127.0.0.1')).status).toBe(503); // no wall screen here
+
+    let closed = 0;
+    let fail = false;
+    const closeWall = async () => {
+      if (fail) throw new Error('kiosk.sh failed');
+      closed++;
+    };
+    app = createApp({ store, hub: new EventHub(), buildId: 'test-build', staticDir: null, connectUrl: null, closeWall });
+    expect((await closeAt('192.168.1.40')).status).toBe(403); // a phone
+    expect((await closeAt('127.0.0.1', 'http://192.168.1.23:3000/api/wall/close')).status).toBe(403); // through a proxy, say
+    expect(closed).toBe(0);
+    expect(await (await closeAt('127.0.0.1')).json()).toEqual({ ok: true });
+    expect(closed).toBe(1);
+    fail = true;
+    expect((await closeAt('::1')).status).toBe(500);
+  });
+
   it('refuses huge requests and unknown paths', async () => {
     const response = await send('POST', '/api/notes', { laneId: 'todo', title: 'x', body: 'y'.repeat(600_000) });
     expect(response.status).toBe(413);

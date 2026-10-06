@@ -7,11 +7,12 @@ import { useNow } from './lib/now.ts';
 import { navigate, parseRoute, useHashToken, type Route } from './lib/route.ts';
 import { DemoSplit } from './proto/DemoSplit.tsx';
 import { ProtoBar } from './proto/ProtoBar.tsx';
-import { SHOW_PROTO_BAR, useProto } from './proto/protoState.ts';
+import { SHOW_PROTO_BAR } from './proto/protoState.ts';
 import { useBoard, useSync } from './store/board.ts';
 import type { SyncStatus } from './store/sync.ts';
+import { CAN_EXIT_TO_DESKTOP, ExitToDesktop } from './wall/ExitToDesktop.tsx';
 import { Wall } from './wall/Wall.tsx';
-import { useBurnInDrift, useLongOffline, useWakeLock } from './wall/standalone.ts';
+import { useBurnInDrift, useLongOffline, useMouseInUse, useWakeLock } from './wall/standalone.ts';
 
 function defaultRoute(): Route {
   // The preview page opens the side-by-side demo on wide screens; the real app opens
@@ -19,14 +20,21 @@ function defaultRoute(): Route {
   return __DEMO_BUILD__ && window.innerWidth >= 1100 ? { view: 'demo' } : { view: 'editor', tab: 'board' };
 }
 
-/** The wall screen itself (#wall): full screen, awake, drifting a little, and honest about the connection. */
+/**
+ * The wall screen itself (#wall): full screen, awake, drifting a little, and honest about
+ * the connection. The mouse pointer shows while the mouse is in use, with a way out to the desktop.
+ */
 function WallScreen({ board, now, connectUrl, status }: { board: Board; now: Date; connectUrl: string | null; status: SyncStatus }) {
   useWakeLock();
   const [x, y] = useBurnInDrift();
   const offline = useLongOffline(status);
+  const mouse = useMouseInUse();
+  const [onExit, setOnExit] = useState(false);
+  const pointer = mouse || onExit;
   return (
-    <div className="wall-standalone" style={{ transform: `translate(${x}px, ${y}px)` }}>
+    <div className={`wall-standalone${pointer ? ' is-pointer' : ''}`} style={{ transform: `translate(${x}px, ${y}px)` }}>
       <Wall board={board} now={now} connectUrl={connectUrl} sound offline={offline} />
+      {CAN_EXIT_TO_DESKTOP && <ExitToDesktop shown={pointer} onHover={setOnExit} />}
     </div>
   );
 }
@@ -53,11 +61,6 @@ export function App() {
   const data = useBoard();
   const sync = useSync();
   const now = useNow();
-  const { titleFont } = useProto();
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('font-clean', titleFont === 'clean');
-  }, [titleFont]);
 
   // The PIN screen has its own address only on the preview page; once signed in it moves on.
   const signedIn = sync.status !== 'locked' && sync.status !== 'loading';

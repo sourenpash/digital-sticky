@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { REMOTE_CURSOR_ID } from '../../../shared/remote.ts';
 import type { SyncStatus } from '../store/sync.ts';
 
 // Things only the real wall screen (the #wall page) does.
@@ -28,6 +29,40 @@ export function useWakeLock(): void {
       void lock?.release();
     };
   }, []);
+}
+
+/**
+ * True while someone is using the wall computer's mouse (or touch screen), and for
+ * `idleMs` after, so the pointer shows only then. The phone remote's moves reach the
+ * page as mouse moves too; they don't count. The remote draws its own cursor just after
+ * each move (server/remote.ts), so a move is looked at a moment later, once that's up.
+ */
+export function useMouseInUse(idleMs = 3000): boolean {
+  const [inUse, setInUse] = useState(false);
+  useEffect(() => {
+    let check = 0;
+    let idle = 0;
+    const remoteCursorShowing = () => document.getElementById(REMOTE_CURSOR_ID)?.style.opacity === '1';
+    const onPointer = () => {
+      if (check) return;
+      check = window.setTimeout(() => {
+        check = 0;
+        if (remoteCursorShowing()) return;
+        setInUse(true);
+        window.clearTimeout(idle);
+        idle = window.setTimeout(() => setInUse(false), idleMs);
+      }, 150);
+    };
+    window.addEventListener('pointermove', onPointer, { passive: true });
+    window.addEventListener('pointerdown', onPointer, { passive: true });
+    return () => {
+      window.removeEventListener('pointermove', onPointer);
+      window.removeEventListener('pointerdown', onPointer);
+      window.clearTimeout(check);
+      window.clearTimeout(idle);
+    };
+  }, [idleMs]);
+  return inUse;
 }
 
 /** True once the board has been out of reach for a while (short blips don't count). */

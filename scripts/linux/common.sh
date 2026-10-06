@@ -9,6 +9,10 @@ PRIVATE_NODE_DIR="$DATA_HOME/node"
 SERVICE=sticky-wall.service
 SERVICE_FILE="$CONFIG_HOME/systemd/user/$SERVICE"
 AUTOSTART_FILE="$CONFIG_HOME/autostart/sticky-wall-kiosk.desktop"
+# The Sticky Wall app (dock and app list). Its name matches the wall window's app id
+# (kiosk.sh: --class=sticky-wall), so the dock knows the open wall is this app.
+LAUNCHER_ID=sticky-wall
+LAUNCHER_FILE="${XDG_DATA_HOME:-$HOME/.local/share}/applications/$LAUNCHER_ID.desktop"
 NODE_MIN=22.18
 
 if [ -t 1 ]; then

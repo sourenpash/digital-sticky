@@ -95,8 +95,8 @@ On the phone, go to Wall → **Control the wall screen**, and see the [screensho
 | Set, change or remove the PIN | `npm run pin` (or `npm run pin -- --off`); the board restarts with the change |
 | Restart the board | `systemctl --user restart sticky-wall` |
 | See what the board is doing | `journalctl --user -u sticky-wall -f` |
-| Close the wall screen (with a keyboard) | Alt+Tab to switch away, or `scripts/linux/kiosk.sh --stop` |
-| Open the wall screen again | `scripts/linux/kiosk.sh` (or log out and back in) |
+| Get to the desktop | Move the mouse: the pointer shows, with **Exit to desktop** in the top-right corner. (Or Alt+Tab, or `scripts/linux/kiosk.sh --stop`) |
+| Open the wall screen again | Click **Sticky Wall** in the dock. (Or `scripts/linux/kiosk.sh`, or log out and back in) |
 | See what the wall screen did | `~/.local/state/sticky-wall/kiosk.log` |
 
 ### From anywhere (optional)
@@ -122,7 +122,7 @@ On the phone, go to Wall → **Control the wall screen**, and see the [screensho
 ```sh
 scripts/linux/kiosk.sh --stop
 systemctl --user disable --now sticky-wall
-rm ~/.config/systemd/user/sticky-wall.service ~/.config/autostart/sticky-wall-kiosk.desktop
+rm ~/.config/systemd/user/sticky-wall.service ~/.config/autostart/sticky-wall-kiosk.desktop ~/.local/share/applications/sticky-wall.desktop
 ```
 
 The board itself stays in this folder's `data/`. `~/.local/share/sticky-wall` holds the downloaded Node.js (if any), and `~/.local/state/sticky-wall` holds the wall browser's profile and log.

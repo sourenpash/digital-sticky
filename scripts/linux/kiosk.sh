@@ -4,7 +4,8 @@
 #
 #   scripts/linux/kiosk.sh          start the wall screen now (from a terminal, it carries on
 #                                   after the terminal closes)
-#   scripts/linux/kiosk.sh --stop   close it (with a keyboard, Alt+Tab also gets you past it)
+#   scripts/linux/kiosk.sh --stop   close it (so does "Exit to desktop" on the wall, which shows
+#                                   when you move the mouse; with a keyboard, Alt+Tab also gets you past it)
 #
 # The browser gets its own profile and a debugging port that only this computer can
 # reach (127.0.0.1): the board server uses it for the phone remote.
@@ -31,11 +32,11 @@ stop_kiosk() {
 case "${1:-}" in
   --stop)
     stop_kiosk
-    echo "Closed the wall screen. It comes back at the next login (or run scripts/linux/kiosk.sh)."
+    echo "Closed the wall screen. It comes back at the next login, or with the Sticky Wall icon (or scripts/linux/kiosk.sh)."
     exit 0
     ;;
   -h | --help)
-    sed -n '2,11s/^# \{0,1\}//p' "$0"
+    sed -n '2,12s/^# \{0,1\}//p' "$0"
     exit 0
     ;;
   '') ;;
@@ -78,6 +79,7 @@ esac
 # shellcheck disable=SC2054 # the comma belongs to --disable-features
 FLAGS=(
   --kiosk
+  "--class=$LAUNCHER_ID"
   --no-first-run
   --no-default-browser-check
   --noerrdialogs

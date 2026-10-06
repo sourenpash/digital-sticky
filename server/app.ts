@@ -23,7 +23,7 @@ import {
 } from '../shared/schema.ts';
 import type { RemoteStatus } from '../shared/remote.ts';
 import type { Goal, Lane, Note } from '../shared/types.ts';
-import type { Auth } from './auth.ts';
+import { fromThisComputer, type Auth } from './auth.ts';
 import type { EventHub } from './events.ts';
 import { hostAllowed } from './hosts.ts';
 import { RemoteError, type KioskRemote } from './remote.ts';
@@ -47,6 +47,8 @@ export interface AppOptions {
   ticker?: TickerFeed | null;
   /** The phone remote, which drives the wall computer's browser; null when it's off. */
   remote?: Pick<KioskRemote, 'status' | 'run'> | null;
+  /** Closes the wall screen on the wall computer, so its desktop shows; null where there's none. */
+  closeWall?: (() => Promise<void>) | null;
 }
 
 /** Open without the PIN: checking the server is up, and signing in and out. */
@@ -75,7 +77,7 @@ function isJson(contentType: string | undefined): boolean {
   return /^application\/json\b/i.test(contentType ?? '');
 }
 
-export function createApp({ store, hub, buildId, staticDir, connectUrl, auth = null, allowedHosts = [], ticker = null, remote = null }: AppOptions): Hono {
+export function createApp({ store, hub, buildId, staticDir, connectUrl, auth = null, allowedHosts = [], ticker = null, remote = null, closeWall = null }: AppOptions): Hono {
   const app = new Hono();
   const stamp = () => store.now().toISOString();
 
@@ -276,6 +278,19 @@ export function createApp({ store, hub, buildId, staticDir, connectUrl, auth = n
   // "Reload the wall" in the app: every screen showing the wall reloads itself.
   api.post('/wall/reload', c => {
     hub.broadcast('reload', {});
+    return c.json({ ok: true });
+  });
+
+  // "Exit to desktop" on the wall screen. Only the wall computer itself may close it.
+  api.post('/wall/close', async c => {
+    if (!fromThisComputer(c)) return c.json({ error: 'Only the wall computer can close the wall screen' }, 403);
+    if (!closeWall) return c.json({ error: 'The wall screen can’t be closed from here' }, 503);
+    try {
+      await closeWall();
+    } catch (error) {
+      console.error('Could not close the wall screen:', error);
+      return c.json({ error: 'Couldn’t close the wall screen' }, 500);
+    }
     return c.json({ ok: true });
   });
 

@@ -26,6 +26,14 @@ export function remoteAddress(c: Context): string | undefined {
   }
 }
 
+/** A request from this computer: a local connection, to a local name, not passed on by a proxy. */
+export function fromThisComputer(c: Context): boolean {
+  const address = remoteAddress(c);
+  if (!address || !LOOPBACK.test(address)) return false;
+  if (!LOCAL_NAMES.has(new URL(c.req.url).hostname)) return false;
+  return FORWARDING_HEADERS.every(name => c.req.header(name) === undefined);
+}
+
 /** The random secret that signs cookies, kept in the data folder (created on first use). */
 export async function loadSecret(dataDir: string): Promise<Buffer> {
   const path = join(dataDir, 'session-secret');
@@ -127,13 +135,9 @@ export class Auth {
     return timingSafeEqual(this.digest(pin), this.pinDigest);
   }
 
-  /** The wall computer's own browser: a local connection, to a local name, not passed on by a proxy. */
+  /** The wall computer's own browser, when it's let in without the PIN. */
   isWallComputer(c: Context): boolean {
-    if (!this.trustLocalhost) return false;
-    const address = remoteAddress(c);
-    if (!address || !LOOPBACK.test(address)) return false;
-    if (!LOCAL_NAMES.has(new URL(c.req.url).hostname)) return false;
-    return FORWARDING_HEADERS.every(name => c.req.header(name) === undefined);
+    return this.trustLocalhost && fromThisComputer(c);
   }
 
   /** Who is asking, for counting wrong PINs: the device, even behind a proxy on this computer. */

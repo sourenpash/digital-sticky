@@ -5,6 +5,9 @@
 export const REMOTE_KEYS = ['Enter', 'Backspace', 'Tab', 'Escape', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'] as const;
 export type RemoteKey = (typeof REMOTE_KEYS)[number];
 
+/** The id of the cursor the remote draws on the wall's page (the wall tells its moves from a real mouse's by it). */
+export const REMOTE_CURSOR_ID = '__sticky_wall_cursor__';
+
 /** Moves are in pixels of a 1920-pixel-wide wall; the server scales them to the real screen. */
 export const REMOTE_WALL_WIDTH = 1920;
 /** Most commands in one request. */

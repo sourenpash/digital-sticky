@@ -180,7 +180,7 @@
 }
 
 .brand-name {
-  font-family: var(--font-marker);
+  font-family: var(--font-ui);
   font-size: 19px;
   font-weight: 700;
 }
@@ -1112,7 +1112,7 @@
   background: transparent;
   box-shadow: none;
   color: var(--paper-ink);
-  font-family: var(--font-title);
+  font-family: var(--font-ui);
   font-size: 24px;
   font-weight: 650;
   line-height: 1.2;
@@ -2501,7 +2501,7 @@
 
 .login-card h1 {
   margin: 6px 0 0;
-  font-family: var(--font-marker);
+  font-family: var(--font-ui);
   font-size: 26px;
 }
 
