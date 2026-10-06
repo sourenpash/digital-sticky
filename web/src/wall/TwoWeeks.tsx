@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { Bell } from 'lucide-react';
+import { Bell, Reply } from 'lucide-react';
 import { datedNotes, noteColor, twoWeekDays, type StripItem } from '../../../shared/board.ts';
 import { daysUntil, isPast, timeLabel } from '../../../shared/dates.ts';
 import type { Lane, Note } from '../../../shared/types.ts';
@@ -9,13 +9,16 @@ const PER_DAY = 3;
 
 function Item({ item, lanes }: { item: StripItem; lanes: Lane[] }) {
   const { note, when, kind, overdue } = item;
-  const tone = kind === 'remind' ? 'remind' : overdue ? 'overdue' : 'due';
-  const time = when.allDay ? null : timeLabel(when.date);
+  const follow = kind === 'follow';
+  const tone = kind === 'remind' ? 'remind' : overdue ? (follow ? 'follow-now' : 'overdue') : follow ? 'follow' : 'due';
+  // Follow-ups go out in the morning; the time would only crowd the day.
+  const time = when.allDay || follow ? null : timeLabel(when.date);
   return (
     <li className={`wall-wk-item paper-${noteColor(note, lanes.find(l => l.id === note.laneId))} is-${tone}`}>
       {kind === 'remind' && <Bell aria-label="Reminder" />}
+      {follow && <Reply aria-label="Follow up" />}
       <span className="wall-wk-title">{note.title || 'Untitled note'}</span>
-      {overdue ? <span className="wall-wk-time">late</span> : time && <span className="wall-wk-time">{time}</span>}
+      {overdue ? <span className="wall-wk-time">{follow ? 'now' : 'late'}</span> : time && <span className="wall-wk-time">{time}</span>}
     </li>
   );
 }

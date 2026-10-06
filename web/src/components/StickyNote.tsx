@@ -1,7 +1,9 @@
-import type { CSSProperties } from 'react';
-import { Bell, Check, Link2, Pin, Repeat } from 'lucide-react';
+import type { CSSProperties, ReactNode } from 'react';
+import { Bell, Check, CornerDownRight, Link2, ListTree, Pin, Repeat, Reply, Sparkles } from 'lucide-react';
+import { aiKicker } from '../../../shared/ai.ts';
 import { applicationKicker } from '../../../shared/applications.ts';
-import { checklistProgress, noteColor, unverifiedCount } from '../../../shared/board.ts';
+import { checklistProgress, noteColor, unverifiedCount, type NoteLinks } from '../../../shared/board.ts';
+import { messageKicker } from '../../../shared/messages.ts';
 import { describeRepeat, repeatStatus, weekDots } from '../../../shared/recurring.ts';
 import type { Lane, Note } from '../../../shared/types.ts';
 import { chipFor, tiltFor } from './chip.ts';
@@ -16,6 +18,10 @@ interface Props {
   compact?: boolean;
   onOpen?: () => void;
   selected?: boolean;
+  /** The sticky it belongs to and its related tasks (see linksByNote). */
+  links?: NoteLinks;
+  /** A relative of the selected sticky: outlined so the family stands out. */
+  related?: boolean;
 }
 
 type Tier = 'short' | 'normal' | 'long' | 'xlong';
@@ -54,7 +60,25 @@ function titleLines(tier: Tier, compact: boolean, has: { meta: boolean; dots: bo
   return Math.max(1, Math.min(MAX_LINES[tier], Math.floor((1 - used - 0.01) / line)));
 }
 
-export function StickyNote({ note, lane, now, size, compact, onOpen, selected }: Props) {
+/**
+ * The small print at the top: how it repeats, the application's stage, the message's
+ * state, the AI helper's last check, or the sticky it belongs to.
+ */
+function kickerFor(note: Note, links: NoteLinks | undefined, now: Date): ReactNode {
+  if (note.done) return undefined;
+  if (note.repeat) return describeRepeat(note.repeat);
+  const text = applicationKicker(note) ?? messageKicker(note) ?? (note.addedBy === 'ai' ? 'Found by AI' : undefined) ?? aiKicker(note, now);
+  if (text) return text;
+  if (!links?.parent) return undefined;
+  return (
+    <>
+      <CornerDownRight className="note-stage-icon" aria-hidden="true" />
+      {links.parent.title || 'Untitled note'}
+    </>
+  );
+}
+
+export function StickyNote({ note, lane, now, size, compact, onOpen, selected, links, related }: Props) {
   const color = noteColor(note, lane);
   const chip = chipFor(note, now, { compact });
   const routine = repeatStatus(note, now);
@@ -69,10 +93,15 @@ export function StickyNote({ note, lane, now, size, compact, onOpen, selected }:
       : null;
   const dots = routine?.every === 'day' ? weekDots(note, now) : null;
   const toCheck = unverifiedCount(note);
-  const kicker = note.done ? undefined : note.repeat ? describeRepeat(note.repeat) : applicationKicker(note);
-  const meta = [note.amount, note.funder].filter(Boolean).join(' · ');
+  const tasks = links?.tasks;
+  const kicker = kickerFor(note, links, now);
+  const meta = note.channel && note.funder ? `To ${note.funder}` : [note.amount, note.funder].filter(Boolean).join(' · ');
   const tier = tierOf(note.title);
-  const lines = titleLines(tier, Boolean(compact), { meta: Boolean(meta), dots: Boolean(dots), flags: Boolean(bar) || toCheck > 0, chip: Boolean(chip) });
+  const lines = titleLines(tier, Boolean(compact), { meta: Boolean(meta), dots: Boolean(dots), flags: Boolean(bar) || toCheck > 0 || Boolean(tasks), chip: Boolean(chip) });
+  const ai = note.ai ? 'Handed to the AI helper' : note.addedBy === 'ai' ? 'Found by the AI helper' : null;
+  // Small squares have no room for the top line, so a related task shows a mark in its parent's color instead.
+  const parent = compact && !note.done && links?.parent ? links.parent : undefined;
+  const marks = [ai, parent, note.pinned].filter(Boolean).length;
   const style = {
     '--tilt': `${tiltFor(note.id)}deg`,
     '--lines': lines,
@@ -85,7 +114,10 @@ export function StickyNote({ note, lane, now, size, compact, onOpen, selected }:
     routine?.complete ? 'is-rested' : '',
     compact ? 'is-compact' : '',
     note.pinned ? 'is-pinned' : '',
+    marks > 0 ? 'has-marks' : '',
+    marks > 1 ? 'has-two-marks' : '',
     selected ? 'is-selected' : '',
+    related && !selected ? 'is-related' : '',
     TITLE_CLASS[tier],
   ]
     .filter(Boolean)
@@ -95,9 +127,20 @@ export function StickyNote({ note, lane, now, size, compact, onOpen, selected }:
     <>
       <span className="note-top">
         {kicker ? <span className="note-stage">{kicker}</span> : <span />}
-        {note.pinned && <Pin className="note-pin" aria-label="Pinned" />}
+        {marks > 0 && (
+          <span className="note-marks">
+            {parent && (
+              <span className={`note-parent paper-${links?.parentColor ?? 'white'}`} title={`Part of “${parent.title}”`} aria-hidden="true">
+                <CornerDownRight />
+              </span>
+            )}
+            {ai && <Sparkles className="note-pin note-ai" aria-label={ai} />}
+            {note.pinned && <Pin className="note-pin" aria-label="Pinned" />}
+          </span>
+        )}
       </span>
       <span className="note-title">{note.title || 'Untitled note'}</span>
+      {parent && <span className="visually-hidden">, part of “{parent.title}”</span>}
       {meta && <span className="note-meta">{meta}</span>}
       <span className="note-foot">
         {dots && (
@@ -107,7 +150,7 @@ export function StickyNote({ note, lane, now, size, compact, onOpen, selected }:
             ))}
           </span>
         )}
-        {(bar || toCheck > 0) && (
+        {(bar || toCheck > 0 || tasks) && (
           <span className={`note-flags${bar ? ' has-bar' : ''}`}>
             {bar && (
               <span className="note-progress">
@@ -126,6 +169,13 @@ export function StickyNote({ note, lane, now, size, compact, onOpen, selected }:
                 <span className="flag-text">&nbsp;to check</span>
               </span>
             )}
+            {tasks && (
+              <span className="flag flag-tasks" aria-label={`${tasks.done} of ${tasks.total} related tasks done`}>
+                <ListTree aria-hidden="true" />
+                {tasks.done}/{tasks.total}
+                <span className="flag-text">&nbsp;tasks</span>
+              </span>
+            )}
           </span>
         )}
         {chip && (
@@ -133,6 +183,7 @@ export function StickyNote({ note, lane, now, size, compact, onOpen, selected }:
             {chip.icon === 'bell' && <Bell aria-hidden="true" />}
             {chip.icon === 'check' && <Check aria-hidden="true" />}
             {chip.icon === 'repeat' && <Repeat aria-hidden="true" />}
+            {chip.icon === 'reply' && <Reply aria-hidden="true" />}
             {chip.label}
           </span>
         )}

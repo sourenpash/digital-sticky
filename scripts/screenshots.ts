@@ -37,6 +37,8 @@ interface Shot {
   keep?: boolean;
   /** Lock the board with a PIN, and open the page as a phone on the Wi-Fi (not the wall computer). */
   pin?: boolean;
+  /** Open the page as a phone on the Wi-Fi (not the wall computer), without a PIN. */
+  away?: boolean;
   /** Run the wall computer's browser too (for the remote), showing what this opens. */
   kiosk?: (kiosk: Page, base: string) => Promise<void>;
   /** Save the wall computer's browser instead of the page. */
@@ -75,6 +77,22 @@ const openRoutine = async (page: Page) => {
 const showLane = (name: string) => async (page: Page) => {
   await page.getByRole('region', { name }).scrollIntoViewIfNeeded();
   await page.waitForTimeout(300);
+};
+/** Opens the square with this title (not one whose related task mentions it). */
+const openNote = (title: RegExp, section?: string) => async (page: Page) => {
+  await page.locator('button.note', { has: page.locator('.note-title', { hasText: title }) }).first().click();
+  await page.waitForTimeout(400);
+  if (section) {
+    await page.locator('.ne-label', { hasText: section }).first().evaluate(el => el.scrollIntoView({ block: 'start' }));
+    await page.waitForTimeout(300);
+  }
+};
+/** The submitted micro-grant's follow-up comes due, so the server nudges about it. */
+const followUpDue = async (api: Api) => {
+  const { board } = (await api.get('/api/state')) as StateResponse;
+  const grant = board.notes.find(note => note.title === 'City arts micro-grant');
+  if (grant) await api.send('PATCH', `/api/notes/${grant.id}`, { followUp: { at: new Date(Date.parse(NOW) - 60_000).toISOString(), everyDays: 14 } });
+  await new Promise(resolve => setTimeout(resolve, 1200));
 };
 const showSetting = (name: string) => async (page: Page) => {
   await page.getByRole('heading', { name }).evaluate(el => el.scrollIntoView({ block: 'start' }));
@@ -119,6 +137,61 @@ const shots: Shot[] = [
   { name: 'phone-board-dark', hash: 'board', ...onPhone, colorScheme: 'dark' },
   { name: 'phone-first-day', hash: 'board', ...onPhone, empty: true },
   { keep: true, name: 'phone-note', hash: 'board', ...onPhone, act: openNsf },
+  { keep: true, name: 'phone-related', hash: 'board', ...onPhone, act: openNote(/NSF CAREER proposal/, 'Related tasks') },
+  { keep: true, name: 'phone-email-follow-up', hash: 'board', ...onPhone, act: openNote(/Email program officer/) },
+  {
+    keep: true,
+    name: 'phone-submitted-ask',
+    hash: 'board',
+    ...onPhone,
+    act: async page => {
+      await openNote(/NIH R01 resubmission/)(page);
+      await page.getByRole('radio', { name: 'Submitted' }).click();
+      await page.waitForTimeout(300);
+    },
+  },
+  { name: 'phone-submitted-ask-dark', hash: 'board', ...onPhone, colorScheme: 'dark', act: async page => {
+      await openNote(/NIH R01 resubmission/)(page);
+      await page.getByRole('radio', { name: 'Submitted' }).click();
+      await page.locator('.ne-label', { hasText: 'Follow up' }).evaluate(el => el.scrollIntoView({ block: 'start' }));
+      await page.waitForTimeout(300);
+    } },
+  { name: 'phone-ai-dark', hash: 'board', ...onPhone, colorScheme: 'dark', act: openNote(/Check grants\.gov/, 'AI helper') },
+  { keep: true, name: 'phone-follow-up-nudge', hash: 'board', ...onPhone, setup: followUpDue },
+  { name: 'wall-follow-up-banner', hash: 'wall', viewport: hd, setup: followUpDue },
+  { keep: true, name: 'phone-ai', hash: 'board', ...onPhone, act: openNote(/Check grants\.gov/, 'AI helper') },
+  {
+    keep: true,
+    name: 'phone-new-ai',
+    hash: 'board',
+    ...onPhone,
+    act: async page => {
+      await openAdd(page);
+      await page.getByRole('button', { name: /^To-do/ }).click();
+      await page.getByLabel('Title').fill('Check government websites for funding updates');
+      await page.getByRole('button', { name: 'Give this to AI' }).click();
+      await page.locator('.ne-label', { hasText: 'AI helper' }).evaluate(el => el.scrollIntoView({ block: 'start' }));
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    keep: true,
+    name: 'phone-pair-prompt',
+    hash: 'board',
+    ...onPhone,
+    away: true,
+    setup: api => api.send('PATCH', '/api/settings', { wall: { showConnect: true } }).then(() => {}),
+  },
+  {
+    name: 'phone-new-email',
+    hash: 'board',
+    ...onPhone,
+    act: async page => {
+      await openAdd(page);
+      await page.getByRole('button', { name: /^Email, text or call/ }).click();
+      await page.waitForTimeout(400);
+    },
+  },
   { name: 'phone-add-menu', hash: 'board', ...onPhone, act: openAdd },
   { keep: true, name: 'phone-goal', hash: 'board', ...onPhone, act: openGoal },
   { keep: true, name: 'phone-recurring', hash: 'board', ...onPhone, act: openRoutine },
@@ -267,6 +340,7 @@ try {
       now: () => new Date(Date.now() + offset),
       tickerFetch: fakeTickerFetch,
       pin: shot.pin ? '482915' : null,
+      reminderTickMs: 500,
       remoteDebugPort: shot.kiosk ? KIOSK_DEBUG_PORT : null,
     });
     const base = `http://127.0.0.1:${PORT}`;
@@ -287,7 +361,7 @@ try {
       isMobile: shot.mobile ?? false,
       hasTouch: shot.mobile ?? false,
       colorScheme: shot.colorScheme ?? 'light',
-      extraHTTPHeaders: shot.pin ? { 'X-Forwarded-For': '203.0.113.7' } : undefined,
+      extraHTTPHeaders: shot.pin || shot.away ? { 'X-Forwarded-For': '203.0.113.7' } : undefined,
     });
     const page = await context.newPage();
     page.on('pageerror', err => console.error(`[${shot.name}] page error:`, err.message));

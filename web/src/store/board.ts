@@ -2,10 +2,11 @@ import { useSyncExternalStore } from 'react';
 import { templateChecklist } from '../../../shared/applications.ts';
 import { lanesInOrder } from '../../../shared/board.ts';
 import { DEFAULT_SETTINGS } from '../../../shared/defaults.ts';
+import { afterFollowingUp } from '../../../shared/followups.ts';
 import type { GoalPatch, LanePatch, NotePatch, SettingsPatch } from '../../../shared/ops.ts';
 import { periodStart, repeatStatus } from '../../../shared/recurring.ts';
 import { makeSampleBoard, SAMPLE_CONNECT_URL } from '../../../shared/sample.ts';
-import type { Board, ChecklistItem, Goal, Lane, LaneKind, Note, NoteColor, Settings } from '../../../shared/types.ts';
+import type { Board, Channel, ChecklistItem, Goal, Lane, LaneKind, Note, NoteColor, Settings, Stage } from '../../../shared/types.ts';
 import { currentTime } from '../lib/now.ts';
 import { uid } from '../lib/uid.ts';
 import { SyncEngine, type SyncState } from './sync.ts';
@@ -48,8 +49,8 @@ const TYPING_MS = 600;
 const TEXT_FIELDS = new Set(['title', 'body', 'funder', 'amount']);
 
 const NOTE_FIELDS = [
-  'laneId', 'title', 'body', 'color', 'due', 'remindAt', 'appType', 'stage', 'funder', 'amount',
-  'checklist', 'links', 'repeat', 'completions', 'pinned', 'done', 'doneAt',
+  'laneId', 'title', 'body', 'color', 'parentId', 'due', 'remindAt', 'appType', 'stage', 'funder', 'amount',
+  'channel', 'sentAt', 'followUp', 'ai', 'checklist', 'links', 'repeat', 'completions', 'pinned', 'done', 'doneAt',
 ] as const;
 
 function notePatch(patch: Partial<Note>): NotePatch {
@@ -63,9 +64,24 @@ function checklistTextOnly(before: ChecklistItem[], after: ChecklistItem[] | und
   return !!after && after.length === before.length && after.every((item, i) => item.id === before[i]?.id && item.done === before[i]?.done);
 }
 
+/** Only the AI helper's instructions changed (they're typed). */
+function aiTextOnly(before: Note['ai'], after: NotePatch['ai']): boolean {
+  if (!before || !after) return false;
+  const { instructions: _a, ...restBefore } = before;
+  const { instructions: _b, ...restAfter } = after;
+  return JSON.stringify(restBefore) === JSON.stringify(restAfter);
+}
+
 function typingDelay(note: Note, patch: NotePatch): number {
   const keys = Object.keys(patch);
-  const typing = keys.length > 0 && keys.every(key => TEXT_FIELDS.has(key) || (key === 'checklist' && checklistTextOnly(note.checklist, patch.checklist)));
+  const typing =
+    keys.length > 0 &&
+    keys.every(
+      key =>
+        TEXT_FIELDS.has(key) ||
+        (key === 'checklist' && checklistTextOnly(note.checklist, patch.checklist)) ||
+        (key === 'ai' && aiTextOnly(note.ai, patch.ai)),
+    );
   return typing ? TYPING_MS : 0;
 }
 
@@ -120,6 +136,65 @@ export const board = {
 
   addNote(note: Note): void {
     engine.dispatch({ type: 'note.add', note: { ...note, createdAt: stamp(), updatedAt: stamp() } });
+  },
+
+  /** A new to-do linked to `parent` (in the first To-do column), on the wall at once. */
+  addRelatedTask(parent: Note, title: string, fields: Partial<Note> = {}): Note {
+    // A Recurring column would make it repeat, so it never goes there.
+    const lanes = lanesInOrder(current().lanes);
+    const lane =
+      lanes.find(l => l.kind === 'task') ??
+      lanes.find(l => l.id === parent.laneId && l.kind !== 'routine') ??
+      lanes.find(l => l.kind !== 'routine') ??
+      lanes[0];
+    const now = stamp();
+    const note: Note = {
+      id: uid(),
+      laneId: lane?.id ?? parent.laneId,
+      title,
+      body: '',
+      checklist: [],
+      links: [],
+      pinned: false,
+      done: false,
+      createdAt: now,
+      updatedAt: now,
+      parentId: parent.id,
+      ...fields,
+    };
+    engine.dispatch({ type: 'note.add', note });
+    return note;
+  },
+
+  /** "I followed up": the next nudge comes after the same wait (a one-time follow-up ends). Returns Undo. */
+  followedUp(id: string): (() => void) | undefined {
+    const note = findNote(id);
+    if (!note?.followUp) return undefined;
+    const before = note.followUp;
+    engine.dispatch({ type: 'note.patch', id, patch: { followUp: afterFollowingUp(before, currentTime()) ?? null } });
+    return () => engine.dispatch({ type: 'note.patch', id, patch: { followUp: before } });
+  },
+
+  /**
+   * "Heard back": an application moves on to `stage`; a message is done. Either way the
+   * follow-up nudges stop. Returns Undo.
+   */
+  heardBack(id: string, stage?: Stage): (() => void) | undefined {
+    const note = findNote(id);
+    if (!note) return undefined;
+    const patch: NotePatch = { followUp: null };
+    const undo: NotePatch = { followUp: note.followUp ?? null };
+    if (stage) {
+      patch.stage = stage;
+      undo.stage = note.stage ?? null;
+    } else {
+      patch.done = true;
+      patch.doneAt = stamp();
+      undo.done = false;
+      undo.doneAt = null;
+    }
+    engine.dispatch({ type: 'note.patch', id, patch });
+    return () => engine.dispatch({ type: 'note.patch', id, patch: undo });
   },
 
   /** Removes a note and returns it so the caller can offer Undo. */
@@ -309,7 +384,7 @@ export function useSync(): SyncState {
 }
 
 /** A blank note for the "Add" templates; it joins the board only when the user taps Add. */
-export function draftNote(kind: LaneKind, lanes: Lane[]): Note {
+export function draftNote(kind: LaneKind, lanes: Lane[], channel?: Channel): Note {
   const lane =
     lanes.find(l => l.kind === kind) ?? (kind === 'routine' ? lanes.find(l => l.kind === 'task') : undefined) ?? lanesInOrder(lanes)[0];
   const now = stamp();
@@ -327,7 +402,7 @@ export function draftNote(kind: LaneKind, lanes: Lane[]): Note {
   };
   if (kind === 'application') return { ...blank, appType: 'grant', stage: 'Researching', checklist: templateChecklist('grant', uid) };
   if (kind === 'routine') return { ...blank, repeat: { every: 'week', times: 1 }, completions: [] };
-  return blank;
+  return channel ? { ...blank, channel } : blank;
 }
 
 /** A blank goal for the goal form; it joins the board only when the user taps Add. */

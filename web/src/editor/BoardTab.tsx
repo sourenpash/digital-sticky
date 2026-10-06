@@ -1,6 +1,6 @@
-import { useState, type DragEvent } from 'react';
+import { useMemo, useState, type DragEvent } from 'react';
 import { Grid2x2, Grid3x3, Plus, Search, Target, X } from 'lucide-react';
-import { compareNotes, lanesInOrder } from '../../../shared/board.ts';
+import { compareNotes, lanesInOrder, linksByNote } from '../../../shared/board.ts';
 import type { Board, Lane, Note } from '../../../shared/types.ts';
 import { StickyNote } from '../components/StickyNote.tsx';
 import { GoalCard } from './GoalCard.tsx';
@@ -56,6 +56,14 @@ export function BoardTab({ board, now, desktop, selectedId, selectedGoalId, onOp
   const [dragging, setDragging] = useState<string | null>(null);
   const [dropLane, setDropLane] = useState<string | null>(null);
   const lanes = lanesInOrder(board.lanes);
+  const links = useMemo(() => linksByNote(board.notes, board.lanes), [board.notes, board.lanes]);
+  // The open sticky's family (the sticky it belongs to, and its related tasks) is outlined.
+  const family = new Set<string>();
+  const selected = selectedId ? board.notes.find(n => n.id === selectedId) : undefined;
+  if (selected) {
+    if (selected.parentId) family.add(selected.parentId);
+    for (const note of board.notes) if (note.parentId === selected.id) family.add(note.id);
+  }
   const notesIn = (lane: Lane) =>
     board.notes
       .filter(n => n.laneId === lane.id && (showDone || !n.done) && matches(n, query))
@@ -206,6 +214,8 @@ export function BoardTab({ board, now, desktop, selectedId, selectedGoalId, onOp
                         now={now}
                         compact={size === 'small'}
                         selected={note.id === selectedId}
+                        related={desktop && family.has(note.id)}
+                        links={links.get(note.id)}
                         onOpen={() => onOpen(note.id)}
                       />
                     </div>

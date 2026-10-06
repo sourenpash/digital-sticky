@@ -3,7 +3,7 @@ import type { z } from 'zod';
 import { makeEmptyBoard } from './defaults.ts';
 import { makeSampleBoard } from './sample.ts';
 import { boardSchema, describeIssues, goalSchema, laneSchema, newNoteSchema, notePatchSchema, noteSchema, remoteRequestSchema, savedFileSchema, settingsPatchSchema, settingsSchema } from './schema.ts';
-import type { Goal, Lane, Note, Settings } from './types.ts';
+import { SERVER_NOTE_FIELDS, type Goal, type Lane, type Note, type Settings } from './types.ts';
 
 describe('schema', () => {
   it('matches the shared types', () => {
@@ -64,6 +64,24 @@ describe('schema', () => {
     expect(remoteRequestSchema.safeParse({ commands: [{ type: 'text', text: '' }] }).success).toBe(false);
     expect(remoteRequestSchema.safeParse({ commands: [{ type: 'eval', code: '1' }] }).success).toBe(false);
     expect(remoteRequestSchema.safeParse({ commands: Array.from({ length: 101 }, () => ({ type: 'click' })) }).success).toBe(false);
+  });
+
+  it('takes related tasks, messages, follow-ups and AI settings, but not what only the server sets', () => {
+    const followUp = { at: '2026-10-20T13:00:00.000Z', everyDays: 14 };
+    expect(notePatchSchema.parse({ parentId: 'n1', channel: 'text', sentAt: '2026-10-06T19:42:00.000Z', followUp })).toEqual({
+      parentId: 'n1',
+      channel: 'text',
+      sentAt: '2026-10-06T19:42:00.000Z',
+      followUp,
+    });
+    expect(notePatchSchema.parse({ followUp: null, ai: null, parentId: null })).toEqual({ followUp: null, ai: null, parentId: null });
+    expect(notePatchSchema.parse({ followedUpFor: followUp.at, aiLog: [], aiState: null, addedBy: 'ai', remindedFor: followUp.at })).toEqual({});
+    expect(notePatchSchema.parse({})).toEqual({});
+    expect(notePatchSchema.safeParse({ channel: 'fax' }).success).toBe(false);
+    expect(notePatchSchema.safeParse({ followUp: { at: followUp.at, everyDays: -1 } }).success).toBe(false);
+    expect(notePatchSchema.safeParse({ ai: { instructions: 'x', schedule: 'daily', time: '8am', mayAdd: true, mayEdit: true } }).success).toBe(false);
+    const created = newNoteSchema.parse({ laneId: 'todo', title: 'x', aiLog: [], followedUpFor: followUp.at, addedBy: 'ai' });
+    for (const field of SERVER_NOTE_FIELDS) expect(created).not.toHaveProperty(field);
   });
 
   it('does not let required fields be cleared', () => {

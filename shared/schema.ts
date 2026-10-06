@@ -2,7 +2,19 @@ import { z } from 'zod';
 import { DEFAULT_SETTINGS } from './defaults.ts';
 import { MAX_REMOTE_COMMANDS, MAX_REMOTE_STEP, MAX_REMOTE_TEXT, REMOTE_KEYS } from './remote.ts';
 import { CRYPTO_SYMBOL, MAX_CRYPTO, MAX_NEWS, MAX_STOCKS, NEWS_SOURCE_IDS, STOCK_SYMBOL } from './ticker.ts';
-import { APP_TYPES, GOAL_MEASURES, LANE_KINDS, NIGHT_MODES, NIGHT_STYLES, NOTE_COLORS, REPEAT_EVERY, STAGES } from './types.ts';
+import {
+  AI_SCHEDULES,
+  AI_STATES,
+  APP_TYPES,
+  CHANNELS,
+  GOAL_MEASURES,
+  LANE_KINDS,
+  NIGHT_MODES,
+  NIGHT_STYLES,
+  NOTE_COLORS,
+  REPEAT_EVERY,
+  STAGES,
+} from './types.ts';
 
 // What the server accepts. Strings are generous (a half-typed title is fine), while
 // ids, dates, links and structure are strict, so a bad request can't damage the board.
@@ -54,12 +66,35 @@ const checklist = z.array(checklistItemSchema).max(200);
 const links = z.array(sourceLinkSchema).max(100);
 const completions = z.array(dateTime).max(1000);
 
+/** Most runs a note keeps in its AI log (newest first). */
+export const MAX_AI_LOG = 10;
+
+const followUpSchema = z.object({ at: dateTime, everyDays: z.number().int().min(0).max(366) });
+const aiTaskSchema = z.object({
+  instructions: z.string().max(4000),
+  schedule: z.enum(AI_SCHEDULES),
+  time: clock,
+  weekday: z.number().int().min(0).max(6).optional(),
+  mayAdd: z.boolean(),
+  mayEdit: z.boolean(),
+});
+const aiRunSchema = z.object({
+  id,
+  at: dateTime,
+  status: z.enum(['done', 'error']),
+  summary: z.string().max(4000),
+  links: z.array(z.object({ url: webAddress, label: z.string().max(200).optional() })).max(20),
+  added: z.array(id).max(20),
+});
+const aiStateSchema = z.object({ status: z.enum(AI_STATES), message: z.string().max(500).optional(), since: dateTime });
+
 export const noteSchema = z.object({
   id,
   laneId: id,
   title,
   body,
   color: noteColorSchema.optional(),
+  parentId: id.optional(),
   due: when.optional(),
   remindAt: dateTime.optional(),
   remindedFor: dateTime.optional(),
@@ -67,6 +102,14 @@ export const noteSchema = z.object({
   stage: z.enum(STAGES).optional(),
   funder: funder.optional(),
   amount: amount.optional(),
+  channel: z.enum(CHANNELS).optional(),
+  sentAt: dateTime.optional(),
+  followUp: followUpSchema.optional(),
+  followedUpFor: dateTime.optional(),
+  ai: aiTaskSchema.optional(),
+  aiLog: z.array(aiRunSchema).max(MAX_AI_LOG).optional(),
+  aiState: aiStateSchema.optional(),
+  addedBy: z.literal('ai').optional(),
   checklist,
   links,
   repeat: repeatSchema.optional(),
@@ -78,8 +121,8 @@ export const noteSchema = z.object({
   updatedAt: dateTime,
 });
 
-/** POST /api/notes. Only the column and title are required; the rest has defaults. */
-export const newNoteSchema = noteSchema.omit({ remindedFor: true }).extend({
+/** POST /api/notes. Only the column and title are required; the rest has defaults (SERVER_NOTE_FIELDS are left out). */
+export const newNoteSchema = noteSchema.omit({ remindedFor: true, followedUpFor: true, aiLog: true, aiState: true, addedBy: true }).extend({
   id: id.optional(),
   body: body.default(''),
   checklist: checklist.default([]),
@@ -95,12 +138,17 @@ export const notePatchSchema = z.object({
   title: title.optional(),
   body: body.optional(),
   color: clearable(noteColorSchema),
+  parentId: clearable(id),
   due: clearable(when),
   remindAt: clearable(dateTime),
   appType: clearable(z.enum(APP_TYPES)),
   stage: clearable(z.enum(STAGES)),
   funder: clearable(funder),
   amount: clearable(amount),
+  channel: clearable(z.enum(CHANNELS)),
+  sentAt: clearable(dateTime),
+  followUp: clearable(followUpSchema),
+  ai: clearable(aiTaskSchema),
   checklist: checklist.optional(),
   links: links.optional(),
   repeat: clearable(repeatSchema),
@@ -186,7 +234,7 @@ export const settingsPatchSchema = z.object({
 /** Most reminders that can be showing at once. */
 export const MAX_ALERTS = 200;
 
-export const alertSchema = z.object({ id, noteId: id, title, firedAt: dateTime });
+export const alertSchema = z.object({ id, noteId: id, title, firedAt: dateTime, kind: z.literal('follow').optional() });
 export const newAlertSchema = z.object({ id: id.optional(), noteId: id });
 
 export const boardSchema = z.object({

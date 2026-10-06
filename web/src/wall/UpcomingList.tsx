@@ -1,12 +1,13 @@
 import { format } from 'date-fns';
-import { Bell } from 'lucide-react';
+import { Bell, Reply } from 'lucide-react';
 import { datedNotes } from '../../../shared/board.ts';
 import { countdownLabel, isPast, timeLabel, urgencyOf } from '../../../shared/dates.ts';
 import type { Note } from '../../../shared/types.ts';
 
 export function UpcomingList({ notes, now, max = 8 }: { notes: Note[]; now: Date; max?: number }) {
   const dated = datedNotes(notes);
-  const items = dated.filter(item => item.kind === 'due' || !isPast(item.when, now)).slice(0, max);
+  // Reminders that already went off drop out; overdue deadlines and follow-ups stay until dealt with.
+  const items = dated.filter(item => item.kind !== 'remind' || !isPast(item.when, now)).slice(0, max);
 
   return (
     <section className="wall-up">
@@ -18,7 +19,8 @@ export function UpcomingList({ notes, now, max = 8 }: { notes: Note[]; now: Date
       ) : (
         <ol className="wall-up-list">
           {items.map(({ note, when, kind }) => {
-            const tone = kind === 'remind' ? 'remind' : urgencyOf(when, now);
+            const past = isPast(when, now);
+            const tone = kind === 'remind' ? 'remind' : kind === 'follow' ? (past ? 'today' : 'follow') : urgencyOf(when, now);
             return (
               <li key={note.id} className={`wall-up-row tone-${tone}`}>
                 <span className="wall-up-date">
@@ -27,10 +29,11 @@ export function UpcomingList({ notes, now, max = 8 }: { notes: Note[]; now: Date
                 </span>
                 <span className="wall-up-title">
                   {kind === 'remind' && <Bell aria-label="Reminder" />}
+                  {kind === 'follow' && <Reply className="is-follow" aria-label="Follow up" />}
                   {note.title}
                 </span>
                 <span className="wall-up-left">
-                  {kind === 'remind' && !when.allDay ? timeLabel(when.date) : countdownLabel(when, now)}
+                  {kind === 'follow' ? (past ? 'Now' : countdownLabel({ ...when, allDay: true }, now)) : kind === 'remind' && !when.allDay ? timeLabel(when.date) : countdownLabel(when, now)}
                 </span>
               </li>
             );

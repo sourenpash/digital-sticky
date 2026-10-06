@@ -3,7 +3,8 @@ import { CalendarDays, LayoutGrid, Monitor, Plus, SearchCheck } from 'lucide-rea
 import { unverifiedCount } from '../../../shared/board.ts';
 import { applyPatch } from '../../../shared/ops.ts';
 import { repeatStatus } from '../../../shared/recurring.ts';
-import type { Board, Goal, LaneKind, Note } from '../../../shared/types.ts';
+import { stageLabel } from '../../../shared/applications.ts';
+import type { Board, Channel, ChecklistItem, Goal, LaneKind, Note, Stage } from '../../../shared/types.ts';
 import { currentTime, useNow } from '../lib/now.ts';
 import type { EditorTab } from '../lib/route.ts';
 import { board, draftGoal, draftNote, laneChange, poppedUpHere, useBoard, useSync } from '../store/board.ts';
@@ -16,6 +17,7 @@ import { CheckTab } from './CheckTab.tsx';
 import { DisplayTab } from './DisplayTab.tsx';
 import { GoalEditor } from './GoalEditor.tsx';
 import { NoteEditor } from './NoteEditor.tsx';
+import { PairPrompt } from './PairPrompt.tsx';
 import { Toasts } from './Toasts.tsx';
 import { useWidth } from './useWidth.ts';
 
@@ -23,6 +25,8 @@ export interface EditorRoute {
   tab: EditorTab;
   noteId?: string;
   newKind?: LaneKind;
+  /** A new to-do that's an email (or text, or call). */
+  newChannel?: Channel;
   goalId?: string;
   newGoal?: boolean;
 }
@@ -89,7 +93,8 @@ function useReminderToasts(alerts: Board['alerts'], loaded: boolean, now: Date):
       if (known.has(alert.id) || poppedUpHere(alert.id)) continue;
       const age = now.getTime() - Date.parse(alert.firedAt);
       if (!first || age < 2 * 60_000) {
-        showToast({ text: `Reminder: ${alert.title}`, actionLabel: 'Dismiss', action: () => board.dismissAlert(alert.id) }, 12_000);
+        const label = alert.kind === 'follow' ? 'Time to follow up' : 'Reminder';
+        showToast({ text: `${label}: ${alert.title}`, actionLabel: 'Dismiss', action: () => board.dismissAlert(alert.id) }, 12_000);
       }
     }
     seen.current = new Set(alerts.map(alert => alert.id));
@@ -117,8 +122,8 @@ export function EditorApp({ route, go }: { route: EditorRoute; go: (token: strin
   }, [route.tab, sheetOpen]);
 
   useEffect(() => {
-    setDraft(route.newKind ? draftNote(route.newKind, board.get().lanes) : null);
-  }, [route.newKind]);
+    setDraft(route.newKind ? draftNote(route.newKind, board.get().lanes, route.newChannel) : null);
+  }, [route.newKind, route.newChannel]);
 
   useEffect(() => {
     setGoalDraft(route.newGoal ? draftGoal() : null);
@@ -172,7 +177,61 @@ export function EditorApp({ route, go }: { route: EditorRoute; go: (token: strin
       const id = selected.id;
       go(lastTab);
       showToast({ text: 'Marked done. It stays on the wall, faded, until midnight.', actionLabel: 'Undo', action: () => board.setDone(id, false) });
+      const open = data.notes.filter(n => n.parentId === id && !n.done);
+      if (open.length) {
+        const count = open.length === 1 ? 'its related task' : `its ${open.length} related tasks`;
+        showToast({ text: `Mark ${count} done too?`, actionLabel: 'Mark done', action: () => open.forEach(n => board.setDone(n.id, true)) }, 10_000);
+      }
     }
+  };
+
+  /** A new to-do linked to the open sticky. */
+  const addRelated = (title: string) => {
+    if (!selected) return;
+    const child = board.addRelatedTask(selected, title);
+    const lane = data.lanes.find(l => l.id === child.laneId);
+    showToast({ text: `Added to ${lane?.title ?? 'the board'}, linked to this one. It's on the wall now.`, actionLabel: 'Undo', action: () => board.deleteNote(child.id) });
+  };
+
+  /** A checklist line becomes its own sticky, linked to this one. */
+  const promote = (item: ChecklistItem) => {
+    if (!selected) return;
+    const parentId = selected.id;
+    const before = selected.checklist;
+    const child = board.addRelatedTask(selected, item.text.trim(), item.done ? { done: true, doneAt: currentTime().toISOString() } : {});
+    board.updateNote(parentId, { checklist: before.filter(i => i.id !== item.id) });
+    showToast({
+      text: `“${item.text.trim()}” is its own sticky now`,
+      actionLabel: 'Undo',
+      action: () => {
+        board.deleteNote(child.id);
+        board.updateNote(parentId, { checklist: before });
+      },
+    });
+  };
+
+  const heardBack = (stage?: Stage) => {
+    if (!selected) return;
+    const undo = board.heardBack(selected.id, stage);
+    if (!undo) return;
+    if (!stage) go(lastTab);
+    showToast({ text: stage ? `Moved to ${stageLabel(stage, selected.appType)}. No more follow-up nudges.` : 'Marked done. No more follow-up nudges.', actionLabel: 'Undo', action: undo });
+  };
+
+  const followedUp = () => {
+    if (!selected?.followUp) return;
+    const every = selected.followUp.everyDays;
+    const undo = board.followedUp(selected.id);
+    if (undo) showToast({ text: every ? `Nice. The next nudge is in ${every} days if you don't hear back.` : 'Nice. No more nudges.', actionLabel: 'Undo', action: undo });
+  };
+
+  const runAi = () => {
+    showToast(
+      __DEMO_BUILD__
+        ? { text: 'In this preview the AI updates are samples. On the wall computer it checks for real, starting next update.' }
+        : { text: 'Saved. The AI helper starts working in the next update.' },
+      7000,
+    );
   };
 
   /** Recurring tasks: log a "Did it" and say where that leaves this week. */
@@ -254,6 +313,7 @@ export function EditorApp({ route, go }: { route: EditorRoute; go: (token: strin
       key={draft.id}
       note={draft}
       lanes={data.lanes}
+      notes={data.notes}
       mode="new"
       now={now}
       onChange={changeDraft}
@@ -273,6 +333,14 @@ export function EditorApp({ route, go }: { route: EditorRoute; go: (token: strin
       onToggleDone={toggleDone}
       onLog={logRoutine}
       onUndoLog={() => board.undoRoutine(selected.id)}
+      notes={data.notes}
+      onOpenNote={openNote}
+      onAddRelated={addRelated}
+      onPromote={promote}
+      onSetDone={(id, done) => board.setDone(id, done)}
+      onHeardBack={heardBack}
+      onFollowedUp={followedUp}
+      onRunAi={runAi}
     />
   ) : null;
   const editorLabel = goalDraft || selectedGoal ? 'Goal details' : 'Note details';
@@ -308,6 +376,11 @@ export function EditorApp({ route, go }: { route: EditorRoute; go: (token: strin
     go(`new-${kind}`);
   };
 
+  const pickMessage = () => {
+    setAdding(false);
+    go('new-message');
+  };
+
   return (
     <div ref={ref} className={`editor ${desktop ? 'is-desktop' : 'is-phone'}`}>
       {width === 0 ? null : desktop ? (
@@ -332,6 +405,7 @@ export function EditorApp({ route, go }: { route: EditorRoute; go: (token: strin
           </aside>
           <main className="ed-main">
             <ActiveReminders board={data} onOpen={openNote} />
+            <PairPrompt board={data} />
             {content}
           </main>
           {editor && <aside className="ed-panel" aria-label={editorLabel}>{editor}</aside>}
@@ -344,6 +418,7 @@ export function EditorApp({ route, go }: { route: EditorRoute; go: (token: strin
           </header>
           <main className="ed-scroll">
             <ActiveReminders board={data} onOpen={openNote} />
+            <PairPrompt board={data} />
             {content}
           </main>
           <nav className="ed-tabbar" aria-label="Sections">
@@ -377,6 +452,7 @@ export function EditorApp({ route, go }: { route: EditorRoute; go: (token: strin
         <AddMenu
           desktop={desktop}
           onPick={pickTemplate}
+          onMessage={pickMessage}
           onGoal={() => {
             setAdding(false);
             newGoal();

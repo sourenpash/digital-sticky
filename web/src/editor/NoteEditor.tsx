@@ -18,14 +18,17 @@ import {
   Pin,
   Plus,
   Repeat as RepeatIcon,
+  StickyNote as StickyNoteIcon,
   Trash2,
   Undo2,
   X,
   type LucideIcon,
 } from 'lucide-react';
 import { APP_TYPE_INFO, appTypeOf, isTemplateChecklist, stageLabel, templateChecklist } from '../../../shared/applications.ts';
-import { lanesInOrder } from '../../../shared/board.ts';
+import { isFinishedStage, lanesInOrder } from '../../../shared/board.ts';
 import { composeWhen, parseWhen, splitWhen } from '../../../shared/dates.ts';
+import { awaitingReply } from '../../../shared/followups.ts';
+import { CHANNEL_INFO } from '../../../shared/messages.ts';
 import { describeRepeat, pruneCompletions, repeatStatus, weekDots } from '../../../shared/recurring.ts';
 import {
   APP_TYPES,
@@ -40,46 +43,63 @@ import {
   type Repeat,
   type RepeatEvery,
   type SourceLink,
+  type Stage,
 } from '../../../shared/types.ts';
 import { currentTime } from '../lib/now.ts';
 import { uid } from '../lib/uid.ts';
+import { AiField } from './AiField.tsx';
+import { FollowUpField } from './FollowUpField.tsx';
+import { MessageField } from './MessageField.tsx';
+import { PartOf, RelatedField } from './RelatedField.tsx';
 import { templateFor } from './templates.ts';
 
-type Section = 'application' | 'due' | 'repeat' | 'remind' | 'checklist' | 'links' | 'body';
+type Section = 'application' | 'message' | 'follow' | 'due' | 'repeat' | 'remind' | 'checklist' | 'links' | 'related' | 'body' | 'ai';
 
 /** Which fields each kind of column shows first. The rest sit behind "Add …". */
 const PRIMARY: Record<LaneKind, Section[]> = {
-  application: ['application', 'due', 'checklist', 'links', 'body'],
-  source: ['links', 'due', 'body'],
-  task: ['due', 'checklist', 'body'],
-  routine: ['repeat', 'body'],
+  application: ['application', 'follow', 'due', 'checklist', 'links', 'related', 'body', 'ai'],
+  source: ['links', 'due', 'body', 'ai'],
+  task: ['message', 'follow', 'due', 'checklist', 'related', 'body', 'ai'],
+  routine: ['repeat', 'body', 'ai'],
   reminder: ['remind', 'body'],
   note: ['body'],
 };
-const ALL: Section[] = ['application', 'due', 'repeat', 'remind', 'checklist', 'links', 'body'];
-/** Recurring tasks have no deadline, and only recurring tasks repeat. */
+const ALL: Section[] = ['application', 'message', 'follow', 'due', 'repeat', 'remind', 'checklist', 'links', 'related', 'body', 'ai'];
+/** Recurring tasks have no deadline, only recurring tasks repeat, and only to-dos are messages. */
 const NOT_OFFERED: Record<LaneKind, Section[]> = {
-  application: ['repeat'],
-  source: ['repeat'],
+  application: ['repeat', 'message'],
+  source: ['repeat', 'message'],
   task: ['repeat'],
-  routine: ['application', 'due', 'remind'],
-  reminder: ['repeat'],
-  note: ['repeat'],
+  routine: ['application', 'due', 'remind', 'message'],
+  reminder: ['repeat', 'message'],
+  note: ['repeat', 'message'],
 };
 const SECTION_LABEL: Record<Section, string> = {
   application: 'application details',
+  message: 'email or text',
+  follow: 'follow-up',
   due: 'deadline',
   repeat: 'repeat',
   remind: 'reminder',
   checklist: 'checklist',
   links: 'sources',
+  related: 'related tasks',
   body: 'notes',
+  ai: 'AI helper',
 };
 
-function hasContent(note: Note, section: Section): boolean {
+function hasContent(note: Note, section: Section, notes: Note[]): boolean {
   switch (section) {
     case 'application':
       return Boolean(note.appType || note.stage || note.funder || note.amount);
+    case 'message':
+      return Boolean(note.channel);
+    case 'follow':
+      return Boolean(note.followUp);
+    case 'related':
+      return notes.some(n => n.parentId === note.id);
+    case 'ai':
+      return Boolean(note.ai || note.aiLog?.length);
     case 'due':
       return Boolean(note.due);
     case 'repeat':
@@ -98,6 +118,8 @@ function hasContent(note: Note, section: Section): boolean {
 interface Props {
   note: Note;
   lanes: Lane[];
+  /** Everything on the board, for related tasks. */
+  notes?: Note[];
   mode: 'edit' | 'new';
   now: Date;
   onChange: (patch: Partial<Note>) => void;
@@ -108,26 +130,105 @@ interface Props {
   /** Recurring tasks: log a "Did it", or take the last one back. */
   onLog?: () => void;
   onUndoLog?: () => void;
+  /** Opens another sticky (a related one). */
+  onOpenNote?: (id: string) => void;
+  /** Related tasks: a new linked to-do, a checklist line made into one, ticking one off. */
+  onAddRelated?: (title: string) => void;
+  onPromote?: (item: ChecklistItem) => void;
+  onSetDone?: (id: string, done: boolean) => void;
+  /** Follow-ups: heard back (the application's new stage, or none for a message), or followed up. */
+  onHeardBack?: (stage?: Stage) => void;
+  onFollowedUp?: () => void;
+  onRunAi?: () => void;
 }
 
-export function NoteEditor({ note, lanes, mode, now, onChange, onClose, onAdd, onDelete, onToggleDone, onLog, onUndoLog }: Props) {
+export function NoteEditor({
+  note,
+  lanes,
+  notes = [],
+  mode,
+  now,
+  onChange,
+  onClose,
+  onAdd,
+  onDelete,
+  onToggleDone,
+  onLog,
+  onUndoLog,
+  onOpenNote,
+  onAddRelated,
+  onPromote,
+  onSetDone,
+  onHeardBack,
+  onFollowedUp,
+  onRunAi,
+}: Props) {
   const lane = lanes.find(l => l.id === note.laneId);
   const kind = lane?.kind ?? 'note';
   const template = templateFor(kind);
   const [showAll, setShowAll] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  /** Just submitted or sent: the Follow up section asks how long to wait. */
+  const [asking, setAsking] = useState(false);
+  const parent = mode === 'edit' && note.parentId && note.parentId !== note.id ? notes.find(n => n.id === note.parentId) : undefined;
   const routine = repeatStatus(note, now);
 
+  // Some sections only make sense at times: following up once it's in or sent, related tasks once it's on the board.
+  const fits = (s: Section) => (s === 'follow' ? asking || awaitingReply(note) || Boolean(note.followUp) : s === 'related' ? mode === 'edit' && Boolean(onAddRelated) : true);
   const primary = PRIMARY[kind];
-  const offered = (s: Section) => !NOT_OFFERED[kind].includes(s) || hasContent(note, s);
-  const shown = (s: Section) => primary.includes(s) || hasContent(note, s) || (showAll && offered(s));
+  const offered = (s: Section) => fits(s) && s !== 'follow' && (!NOT_OFFERED[kind].includes(s) || hasContent(note, s, notes));
+  const shown = (s: Section) => fits(s) && (primary.includes(s) || hasContent(note, s, notes) || (showAll && offered(s)));
   const sections = [...primary, ...ALL.filter(s => !primary.includes(s))].filter(shown);
   const hidden = ALL.filter(s => !shown(s) && offered(s));
+
+  /** Submitting asks about following up; going back to before Submitted drops the follow-up and the date it went in. */
+  const pickStage = (stage: Stage | undefined) => {
+    const patch: Partial<Note> = { stage };
+    const submitted = stage !== undefined && isFinishedStage({ ...note, stage });
+    if (stage === 'Submitted' && note.stage !== 'Submitted') {
+      patch.sentAt = note.sentAt ?? now.toISOString();
+      setAsking(true);
+    } else if (stage !== 'Submitted') {
+      if (note.followUp) patch.followUp = undefined;
+      if (!submitted && note.sentAt) patch.sentAt = undefined;
+      setAsking(false);
+    }
+    onChange(patch);
+  };
 
   const renderSection = (section: Section): ReactNode => {
     switch (section) {
       case 'application':
-        return <ApplicationFields key={section} note={note} withType={mode === 'edit'} onChange={onChange} />;
+        return <ApplicationFields key={section} note={note} withType={mode === 'edit'} onChange={onChange} onStage={pickStage} />;
+      case 'message':
+        return <MessageField key={section} note={note} now={now} quiet={mode === 'new'} onChange={onChange} onSent={() => setAsking(true)} />;
+      case 'follow':
+        return (
+          <FollowUpField
+            key={section}
+            note={note}
+            now={now}
+            asking={asking}
+            onAsked={() => setAsking(false)}
+            onChange={onChange}
+            onHeardBack={onHeardBack}
+            onFollowedUp={onFollowedUp}
+          />
+        );
+      case 'related':
+        return (
+          <RelatedField
+            key={section}
+            note={note}
+            notes={notes}
+            now={now}
+            onOpen={id => onOpenNote?.(id)}
+            onAdd={title => onAddRelated?.(title)}
+            onSetDone={(id, done) => onSetDone?.(id, done)}
+          />
+        );
+      case 'ai':
+        return <AiField key={section} note={note} notes={notes} now={now} mode={mode} onChange={onChange} onOpen={onOpenNote} onRunNow={onRunAi} />;
       case 'due':
         return (
           <WhenField
@@ -160,7 +261,7 @@ export function NoteEditor({ note, lanes, mode, now, onChange, onClose, onAdd, o
           />
         );
       case 'checklist':
-        return <ChecklistField key={section} items={note.checklist} onChange={checklist => onChange({ checklist })} />;
+        return <ChecklistField key={section} items={note.checklist} onChange={checklist => onChange({ checklist })} onPromote={mode === 'edit' ? onPromote : undefined} />;
       case 'links':
         return <LinksField key={section} links={note.links} onChange={links => onChange({ links })} />;
       case 'body':
@@ -207,7 +308,7 @@ export function NoteEditor({ note, lanes, mode, now, onChange, onClose, onAdd, o
             <Pin />
           </button>
         ) : (
-          <span className="ne-head-kind">New {template.short}</span>
+          <span className="ne-head-kind">New {note.channel ? CHANNEL_INFO[note.channel].label.toLowerCase() : template.short}</span>
         )}
       </header>
 
@@ -222,11 +323,18 @@ export function NoteEditor({ note, lanes, mode, now, onChange, onClose, onAdd, o
           <TitleInput
             id={`title-${note.id}`}
             value={note.title}
-            placeholder={kind === 'application' ? APP_TYPE_INFO[appTypeOf(note)].titlePlaceholder : template.titlePlaceholder}
+            placeholder={
+              kind === 'application'
+                ? APP_TYPE_INFO[appTypeOf(note)].titlePlaceholder
+                : note.channel
+                  ? CHANNEL_INFO[note.channel].titlePlaceholder
+                  : template.titlePlaceholder
+            }
             onChange={title => onChange({ title })}
           />
           <ColorPicker value={note.color} laneColor={lane?.color} onChange={color => onChange({ color })} />
         </div>
+        {parent && <PartOf parent={parent} onOpen={id => onOpenNote?.(id)} onUnlink={() => onChange({ parentId: undefined })} />}
 
         {sections.map(renderSection)}
 
@@ -393,7 +501,17 @@ function TypePicker({ note, onChange }: { note: Note; onChange: (patch: Partial<
   );
 }
 
-function ApplicationFields({ note, withType, onChange }: { note: Note; withType: boolean; onChange: (patch: Partial<Note>) => void }) {
+function ApplicationFields({
+  note,
+  withType,
+  onChange,
+  onStage,
+}: {
+  note: Note;
+  withType: boolean;
+  onChange: (patch: Partial<Note>) => void;
+  onStage: (stage: Stage | undefined) => void;
+}) {
   const info = APP_TYPE_INFO[appTypeOf(note)];
   const Icon = APP_ICON[appTypeOf(note)];
   return (
@@ -410,7 +528,7 @@ function ApplicationFields({ note, withType, onChange }: { note: Note; withType:
             role="radio"
             aria-checked={note.stage === stage}
             className={`seg${note.stage === stage ? ' is-on' : ''}`}
-            onClick={() => onChange({ stage: note.stage === stage ? undefined : stage })}
+            onClick={() => onStage(note.stage === stage ? undefined : stage)}
           >
             {stageLabel(stage, note.appType)}
           </button>
@@ -678,7 +796,16 @@ function RepeatField({ note, now, onChange }: { note: Note; now: Date; onChange:
   );
 }
 
-function ChecklistField({ items, onChange }: { items: ChecklistItem[]; onChange: (items: ChecklistItem[]) => void }) {
+function ChecklistField({
+  items,
+  onChange,
+  onPromote,
+}: {
+  items: ChecklistItem[];
+  onChange: (items: ChecklistItem[]) => void;
+  /** Makes a line into its own sticky, linked to this one. */
+  onPromote?: (item: ChecklistItem) => void;
+}) {
   const [text, setText] = useState('');
   const done = items.filter(i => i.done).length;
   const add = () => {
@@ -717,6 +844,17 @@ function ChecklistField({ items, onChange }: { items: ChecklistItem[]; onChange:
                 value={item.text}
                 onChange={e => onChange(items.map(i => (i.id === item.id ? { ...i, text: e.target.value } : i)))}
               />
+              {onPromote && item.text.trim() && (
+                <button
+                  type="button"
+                  className="icon-btn icon-btn-sm"
+                  aria-label={`Make “${item.text}” its own sticky`}
+                  title="Make it its own sticky"
+                  onClick={() => onPromote(item)}
+                >
+                  <StickyNoteIcon />
+                </button>
+              )}
               <button
                 type="button"
                 className="icon-btn icon-btn-sm"

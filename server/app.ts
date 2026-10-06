@@ -41,6 +41,8 @@ export interface AppOptions {
   connectUrl: string | null | (() => string | null);
   /** Set when there's a PIN: everything but signing in needs it. */
   auth?: Auth | null;
+  /** Count the browser on this computer (localhost) as the wall computer (default true). */
+  trustLocalhost?: boolean;
   /** Names to answer to besides this computer's own and home-network ones. */
   allowedHosts?: readonly string[];
   /** Live prices and headlines for the wall's ticker. */
@@ -77,7 +79,19 @@ function isJson(contentType: string | undefined): boolean {
   return /^application\/json\b/i.test(contentType ?? '');
 }
 
-export function createApp({ store, hub, buildId, staticDir, connectUrl, auth = null, allowedHosts = [], ticker = null, remote = null, closeWall = null }: AppOptions): Hono {
+export function createApp({
+  store,
+  hub,
+  buildId,
+  staticDir,
+  connectUrl,
+  auth = null,
+  trustLocalhost = true,
+  allowedHosts = [],
+  ticker = null,
+  remote = null,
+  closeWall = null,
+}: AppOptions): Hono {
   const app = new Hono();
   const stamp = () => store.now().toISOString();
 
@@ -124,7 +138,8 @@ export function createApp({ store, hub, buildId, staticDir, connectUrl, auth = n
 
   api.get('/session', async c => {
     c.header('Cache-Control', 'no-store');
-    if (!auth) return c.json({ pinSet: false, signedIn: true, wallComputer: false });
+    // The app asks phones (not the wall computer) whether to hide the "Connect your phone" code.
+    if (!auth) return c.json({ pinSet: false, signedIn: true, wallComputer: trustLocalhost && fromThisComputer(c) });
     const wallComputer = auth.isWallComputer(c);
     const session = await auth.session(c);
     if (session.renew) await auth.signIn(c);

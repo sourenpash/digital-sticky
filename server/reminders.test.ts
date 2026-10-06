@@ -126,6 +126,69 @@ describe('reminderTick', () => {
   });
 });
 
+describe('follow-up nudges', () => {
+  const DAY = 24 * 60 * MIN;
+  const at = (offsetMs: number) => new Date(now.getTime() + offsetMs);
+  const submitted = (fields: Partial<Note> = {}) =>
+    note({ laneId: 'apps', title: 'NSF CAREER', stage: 'Submitted', followUp: { at: minutesAgo(1), everyDays: 14 }, ...fields });
+
+  it('nudges when the follow-up time comes, then again each interval until it is dealt with', () => {
+    const first = tick(boardWith([submitted()]));
+    expect(first.change?.fire).toEqual([expect.objectContaining({ noteId: 'n1', kind: 'follow', show: true, remindAt: minutesAgo(1) })]);
+    expect(first.board.alerts).toEqual([expect.objectContaining({ noteId: 'n1', kind: 'follow', title: 'NSF CAREER' })]);
+    expect(first.board.notes[0]?.followedUpFor).toBe(minutesAgo(1));
+    // Nothing more until the next interval (the pop-up itself times out after an hour).
+    expect(tick(first.board, at(13 * DAY)).change?.fire).toEqual([]);
+    const second = tick(first.board, at(14 * DAY));
+    expect(second.change?.fire).toEqual([expect.objectContaining({ kind: 'follow', show: true })]);
+    expect(second.board.notes[0]?.followedUpFor).toBe(new Date(Date.parse(minutesAgo(1)) + 14 * DAY).toISOString());
+  });
+
+  it('nudges a one-time follow-up only once', () => {
+    const once = tick(boardWith([submitted({ followUp: { at: minutesAgo(1), everyDays: 0 } })])).board;
+    expect(tick(once, at(30 * DAY)).change?.fire ?? []).toEqual([]);
+  });
+
+  it('stops once the follow-up is moved on, stopped or the note is done', () => {
+    const fired = tick(boardWith([submitted()])).board;
+    // "I followed up": the next nudge is two weeks away, and the pop-up goes.
+    const movedOn = applyOp(fired, { type: 'note.patch', id: 'n1', patch: { followUp: { at: at(14 * DAY).toISOString(), everyDays: 14 } } }, now);
+    expect(movedOn.alerts).toEqual([]);
+    expect(tick(movedOn, at(13 * DAY)).change?.fire ?? []).toEqual([]);
+    // "Heard back": the stage moves on and the follow-up is cleared.
+    const heard = applyOp(fired, { type: 'note.patch', id: 'n1', patch: { stage: 'Interview', followUp: null } }, now);
+    expect(heard.alerts).toEqual([]);
+    expect(tick(heard, at(60 * DAY)).change?.fire ?? []).toEqual([]);
+    // A reply to a message marks it done.
+    const replied = applyOp(fired, { type: 'note.patch', id: 'n1', patch: { done: true } }, now);
+    expect(replied.alerts).toEqual([]);
+    expect(tick(replied, at(14 * DAY)).change?.fire).toEqual([expect.objectContaining({ show: false })]);
+  });
+
+  it('skips nudges missed by more than a day, but still nudges at the next one', () => {
+    const missed = tick(boardWith([submitted({ followUp: { at: minutesAgo(25 * 60), everyDays: 7 } })]));
+    expect(missed.change?.fire).toEqual([expect.objectContaining({ kind: 'follow', show: false })]);
+    expect(missed.board.alerts).toEqual([]);
+    expect(tick(missed.board, at(7 * DAY - 25 * 60 * MIN)).change?.fire).toEqual([expect.objectContaining({ show: true })]);
+  });
+
+  it('can nudge and remind about the same note, keeping one pop-up for it', () => {
+    const { change, board } = tick(boardWith([submitted({ remindAt: minutesAgo(2) })]));
+    expect(change?.fire.map(f => f.kind ?? 'remind')).toEqual(['remind', 'follow']);
+    expect(board.alerts).toEqual([expect.objectContaining({ kind: 'follow' })]);
+    expect(board.notes[0]).toMatchObject({ remindedFor: minutesAgo(2), followedUpFor: minutesAgo(1) });
+  });
+
+  it('skips a nudge whose follow-up changed between the check and the change', () => {
+    const board = boardWith([submitted()]);
+    const change = reminderTick(board, now, nextId);
+    const stopped = applyOp(board, { type: 'note.patch', id: 'n1', patch: { followUp: null } }, now);
+    const after = applyOp(stopped, change!, now);
+    expect(after.alerts).toEqual([]);
+    expect(after.notes[0]?.followedUpFor).toBeUndefined();
+  });
+});
+
 describe('startReminders', () => {
   const dirs: string[] = [];
   afterEach(async () => {

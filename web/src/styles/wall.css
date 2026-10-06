@@ -22,6 +22,7 @@
   --tone-week: #eadca6;
   --tone-later: #a39a8c;
   --tone-remind: #ffb8cb;
+  --tone-follow: #ffcd99;
   --tone-good: #8fd6a8;
 
   position: relative;
@@ -489,6 +490,10 @@
   color: var(--tone-remind);
 }
 
+.wall-up-title svg.is-follow {
+  color: var(--tone-follow);
+}
+
 .wall-up-left {
   font-size: calc(var(--u) * 1.05);
   font-weight: 800;
@@ -502,6 +507,7 @@
 .tone-week .wall-up-left { color: var(--tone-week); }
 .tone-later .wall-up-left { color: var(--tone-later); }
 .tone-remind .wall-up-left { color: var(--tone-remind); }
+.tone-follow .wall-up-left { color: var(--tone-follow); }
 
 .wall-up-empty {
   margin: 0;
@@ -753,6 +759,20 @@
   letter-spacing: 0.06em;
 }
 
+/* Time to follow up (it's waiting on today). */
+.wall-wk-item.is-follow-now {
+  box-shadow: inset calc(var(--u) * 0.3) 0 0 var(--tone-today);
+  padding-left: calc(var(--u) * 0.65);
+}
+
+.wall-wk-item.is-follow-now .wall-wk-time {
+  color: #9a3d00;
+  opacity: 1;
+  text-transform: uppercase;
+  font-size: 0.85em;
+  letter-spacing: 0.06em;
+}
+
 .wall-wk-more {
   color: var(--w-muted);
   font-size: calc(var(--u) * 0.82);
@@ -834,6 +854,18 @@
   animation: bell-ring 2.4s ease-in-out infinite;
 }
 
+/* Time to follow up on an application or a sent message. */
+.wall-banner.is-follow {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0) 16%), var(--paper-orange);
+  box-shadow:
+    0 0 0 calc(var(--u) * 0.35) rgba(255, 205, 153, 0.22),
+    0 calc(var(--u) * 1) calc(var(--u) * 3) rgba(0, 0, 0, 0.55);
+}
+
+.wall-banner.is-follow .wall-banner-icon {
+  animation: none;
+}
+
 .wall-banner-body {
   display: flex;
   flex-direction: column;
@@ -900,6 +932,7 @@
   --tone-soon: #b38a45;
   --tone-week: #a39a78;
   --tone-remind: #b38795;
+  --tone-follow: #b39272;
   background: var(--board);
 }
 

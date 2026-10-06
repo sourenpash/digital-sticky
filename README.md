@@ -4,19 +4,27 @@ A sticky-note wall for a bedroom monitor. It shows colored squares for applicati
 
 ![The wall screen](docs/screenshots/wall-day.png)
 
-## Status: checkpoint 5, the phone remote and the wall computer
+## Status: checkpoint 6, related tasks, follow-ups and the AI helper's screens
 
-- **Control the wall from your phone.** Wall → Control the wall screen turns the phone into a touchpad and keyboard for the wall.
-  - Drag to move the cursor, tap to click, tap twice to double-click, and scroll with two fingers.
-  - When you tap a text box on the wall, a **Tap to type** bar shows up. Letters appear on the wall as you type, and the phone's keyboard matches the box: an email box gets the @ keyboard, and a password stays out of the phone's word suggestions.
-  - **Website** opens a site over the wall in its own tab. **Back** or **Board** closes it again, and the board keeps running underneath, so reminders and changes are there when you come back.
-  - When a website asks "OK or Cancel?", you answer it on the phone.
-- **One command sets up the wall computer.** `scripts/linux/install.sh` does the whole setup on the Intel NUC:
-  - runs the board as a service that starts at power-on;
-  - opens the wall full screen whenever someone logs in;
-  - keeps the screen from blanking or sleeping.
-- **The wall looks after itself.** If the browser closes or crashes, it opens again. If the wall's page crashes, or can't load because the board was restarting, it's loaded again within seconds. The browser also restarts once a night, at 4 AM, so it doesn't slowly use up memory.
-- **Updates** are one command too: `scripts/linux/update.sh`. The wall and any open phones reload by themselves.
+- **Related tasks.** Open a sticky and add a related task. It becomes its own sticky (in To-do), linked to the first one.
+  - The first sticky shows how many of its related tasks are done, like 1/3. Each related task says which sticky it's part of. Small squares show this as a ↳ mark in that sticky's color.
+  - A checklist line can become its own sticky too: tap the sticky icon next to it.
+  - Marking a sticky done offers to mark its related tasks done as well.
+- **Follow-ups.** When you mark an application Submitted, or an email or text sent, the board asks when to follow up if you don't hear back: 1 week, 2 weeks or 1 month (or 3 days for a text or call).
+  - On that day at 9 AM the wall and your phone remind you. If nothing changes, they remind you again after the same wait, until you answer.
+  - Answer from the reminder or from the sticky:
+    - **Heard back** moves an application to its new stage (shortlisted, awarded or declined), or finishes a message.
+    - **Followed up** waits the same time again before the next reminder.
+    - You can also change the wait or stop the reminders.
+  - Squares say "Follow up Oct 14", or "Follow up now" in orange. Follow-ups also show in Coming up and in the two-week calendar.
+- **Emails, texts and calls are to-dos.** Use Add, then Email, text or call, or change the type of any to-do. You get a To field and a **Mark sent** button, then the follow-up question.
+- **Hiding the Connect code.** Once a phone is connected, it asks once whether to hide the wall's "Connect your phone" code. The switch is now at the top of the Wall tab.
+- **AI helper (screens only for now).** Every sticky has **Give this to AI**. You set:
+  - what it should do;
+  - how often: once, every day or every week, at a time you pick;
+  - whether it may add stickies for what it finds, or update the sticky's checklist and sources.
+
+  The preview page shows sample results: a sticky that checks grants.gov and NSF every morning, what it found, and the sticky it added. The real helper comes in checkpoint 7. It will run on the wall computer with Claude Code, signed in to your Claude account, so it uses your Max plan.
 
 | Checkpoint | What it adds | Status |
 | --- | --- | --- |
@@ -24,7 +32,9 @@ A sticky-note wall for a bedroom monitor. It shows colored squares for applicati
 | 2 | Real data and live sync: a small server on the wall computer that saves the board to disk | Done |
 | 3 | Two-week calendar, application types, ticker and phone remote screens; reminders on a timer | Done |
 | 4 | Reminders on your phone, PIN protection, add to Home Screen, wall polish, live ticker prices and headlines | Done |
-| 5 | Remote control of the wall from your phone, and a one-command install on the Intel NUC | Ready for review |
+| 5 | Remote control of the wall from your phone, and a one-command install on the Intel NUC | Done |
+| 6 | Related tasks, follow-up reminders, emails and texts as to-dos, hiding the Connect code, and the AI helper's screens | Ready for review |
+| 7 | The AI helper running on the wall computer (Claude Code with your Claude account) | Next |
 
 ## Set up the wall computer
 
@@ -63,6 +73,8 @@ Then do the one step the installer can't: turn on **automatic login** (Settings 
 
 It's safe to run the installer again at any time; that's also how to repair the setup.
 
+The wall looks after itself. If the browser closes or crashes, it opens again. If the wall's page crashes, or can't load because the board was restarting, it's loaded again within seconds. The browser also restarts once a night, at 4 AM, so it doesn't slowly use up memory.
+
 ### Connect your phone
 
 Scan the QR code on the wall, or open the address the installer printed, such as `http://192.168.1.23:3000`. Your phone has to be on the same Wi-Fi. In Safari, tap Share → **Add to Home Screen**, and if there's a PIN, enter it once there.
@@ -76,7 +88,14 @@ The Home Screen app and its sign-in are tied to that address. To keep it from ch
 
 ![The phone as a remote](docs/screenshots/phone-remote.png)
 
-On the phone, go to Wall → **Control the wall screen**, and see the [screenshots](#screenshots) below. A few things to know:
+On the phone, go to Wall → **Control the wall screen**, and see the [screenshots](#screenshots) below.
+
+- Drag to move the cursor, tap to click, tap twice to double-click, and scroll with two fingers.
+- When you tap a text box on the wall, a **Tap to type** bar shows up. Letters appear on the wall as you type, and the phone's keyboard matches the box: an email box gets the @ keyboard, and a password stays out of the phone's word suggestions.
+- **Website** opens a site over the wall in its own tab. **Back** or **Board** closes it again, and the board keeps running underneath, so reminders and changes are there when you come back.
+- When a website asks "OK or Cancel?", you answer it on the phone.
+
+A few things to know:
 
 - **Only the wall's browser can be controlled.** Ubuntu's own windows and messages can't, and neither can a browser welcome or privacy notice that appears once when Chrome first starts: click through that with a mouse.
 - **What it can't do (yet):**
@@ -170,6 +189,14 @@ Put any of these in a `.env` file next to `package.json` (or set them in the env
 
 ## Screenshots
 
+| Related tasks | Submitted: follow up? | An email to follow up | A follow-up reminder |
+| --- | --- | --- | --- |
+| ![Related tasks](docs/screenshots/phone-related.png) | ![Follow up?](docs/screenshots/phone-submitted-ask.png) | ![An email to follow up](docs/screenshots/phone-email-follow-up.png) | ![A follow-up reminder](docs/screenshots/phone-follow-up-nudge.png) |
+
+| A sticky handed to the AI helper | Giving a new sticky to AI | Hide the Connect code? |
+| --- | --- | --- |
+| ![AI helper](docs/screenshots/phone-ai.png) | ![New sticky for AI](docs/screenshots/phone-new-ai.png) | ![Hide the code?](docs/screenshots/phone-pair-prompt.png) |
+
 | The remote | Typing on the wall | A website asks | The cursor on the wall |
 | --- | --- | --- | --- |
 | ![Remote](docs/screenshots/phone-remote.png) | ![Typing](docs/screenshots/phone-remote-typing.png) | ![Question](docs/screenshots/phone-remote-question.png) | ![Cursor on the wall](docs/screenshots/wall-remote-cursor.png) |
@@ -196,6 +223,7 @@ Put any of these in a `.env` file next to `package.json` (or set them in the env
 
 - `server/` is a small [Hono](https://hono.dev) server:
   - `store.ts` keeps the board in memory and saves it to `data/board.json`;
+  - `reminders.ts` pops reminders and follow-up reminders up on the wall at their time;
   - `app.ts` is the HTTP API;
   - `events.ts` sends live updates as server-sent events;
   - `remote.ts` drives the wall's browser for the phone remote through Chrome's DevTools protocol (`cdp.ts`), and reloads the wall's page if it crashes or fails to load.
@@ -229,6 +257,15 @@ The API, for scripts (and later, an AI assistant):
 | `POST /api/remote` | Remote commands, in order: `{"commands": [{"type": "move", "dx": 40, "dy": 0}, {"type": "click"}, {"type": "text", "text": "hi"}]}`. Others are `scroll`, `key`, `back`, `reload`, `board`, `open` (`{"url": …}`) and `dialog` (`{"accept": true}`) |
 | `GET /api/export` | Download everything, trash included |
 
+Besides the usual fields, a note can have:
+
+- `parentId`: the sticky it's a related task of;
+- `channel` (`email`, `text` or `call`) and `sentAt`, for messages;
+- `followUp`: `{"at": time, "everyDays": 14}`;
+- `ai`: the AI helper's settings.
+
+The server sets `followedUpFor`, `aiLog` and `aiState` itself and ignores them in requests.
+
 Changes must be sent as JSON (`Content-Type: application/json`). With a PIN, everything except the health check and signing in needs the session cookie from `POST /api/login` (scripts on the wall computer itself, at `localhost`, don't).
 
 ## Development
@@ -238,7 +275,7 @@ Changes must be sent as JSON (`Content-Type: application/json`). With a PIN, eve
 | `npm run dev` | The board server plus a development server with live reload, at `http://localhost:5173` (add `-- --demo` for the sample board) |
 | `npm run pin` | Set the board's PIN in `.env` (`npm run pin -- --off` removes it) |
 | `npm run typecheck` | TypeScript checks for the app, the server and the tooling |
-| `npm test` | Unit tests: the data rules, the store, the API, live updates, syncing and the remote's input handling |
+| `npm test` | Unit tests: the data rules, follow-up timing, the store, the API, live updates, syncing and the remote's input handling |
 | `npm run test:e2e` | Builds, then runs a real server with headless Chromium as a phone, a computer and the wall, plus the kiosk script driving the wall's browser for the remote |
 | `npm run build` | Production build into `dist/web` |
 | `npm run screenshots` | Renders `docs/screenshots` against a real server with the sample board (build first) |

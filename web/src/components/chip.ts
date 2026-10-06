@@ -1,9 +1,10 @@
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { stageLabel } from '../../../shared/applications.ts';
 import { isFinishedStage, noteWhen } from '../../../shared/board.ts';
-import { countdownLabel, daysUntil, isPast, reminderLabel, timeLabel, urgencyOf, type When } from '../../../shared/dates.ts';
+import { countdownLabel, daysUntil, isPast, parseWhen, reminderLabel, timeLabel, urgencyOf, type When } from '../../../shared/dates.ts';
+import { CHANNEL_INFO } from '../../../shared/messages.ts';
 import { repeatStatus, type RepeatStatus } from '../../../shared/recurring.ts';
-import type { Note } from '../../../shared/types.ts';
+import type { FollowUp, Note } from '../../../shared/types.ts';
 
 export type ChipTone =
   | 'overdue'
@@ -15,12 +16,14 @@ export type ChipTone =
   | 'good'
   | 'muted'
   | 'repeat'
-  | 'repeat-now';
+  | 'repeat-now'
+  | 'follow'
+  | 'follow-now';
 
 export interface ChipInfo {
   label: string;
   tone: ChipTone;
-  icon?: 'bell' | 'check' | 'repeat';
+  icon?: 'bell' | 'check' | 'repeat' | 'reply';
 }
 
 /** What the little badge on a note says, and how loud it is. Small squares get shorter wording. */
@@ -29,6 +32,7 @@ export function chipFor(note: Note, now: Date, opts: { compact?: boolean } = {})
   const compact = opts.compact ?? false;
   const routine = repeatStatus(note, now);
   if (routine) return routineChip(routine, compact);
+  if (note.followUp) return followChip(note.followUp, now, compact);
   const w = noteWhen(note);
   // An upcoming interview reminder says more than "Interview".
   const interviewSoon = note.stage === 'Interview' && w && !isPast(w.when, now);
@@ -37,6 +41,10 @@ export function chipFor(note: Note, now: Date, opts: { compact?: boolean } = {})
       ? { label: 'Declined', tone: 'muted' }
       : { label: stageLabel(note.stage, note.appType), tone: 'good', icon: 'check' };
   }
+  if (note.channel && note.sentAt) {
+    const word = CHANNEL_INFO[note.channel].sentWord;
+    return { label: compact ? word : `${word} ${format(parseISO(note.sentAt), 'MMM d')}`, tone: 'good', icon: 'check' };
+  }
   if (!w) return null;
   if (w.kind === 'remind') {
     return isPast(w.when, now)
@@ -44,6 +52,15 @@ export function chipFor(note: Note, now: Date, opts: { compact?: boolean } = {})
       : { label: compact ? shortReminder(w.when, now) : reminderLabel(w.when, now), tone: 'remind', icon: 'bell' };
   }
   return { label: compact ? shortCountdown(w.when, now) : countdownLabel(w.when, now), tone: urgencyOf(w.when, now) };
+}
+
+/** "Follow up now" once a nudge has come; before that "Follow up Thu" or "Follow up Oct 20". */
+function followChip(followUp: FollowUp, now: Date, compact: boolean): ChipInfo {
+  const when = parseWhen(followUp.at);
+  if (!when || when.date.getTime() <= now.getTime()) return { label: compact ? 'Follow up' : 'Follow up now', tone: 'follow-now', icon: 'reply' };
+  const days = daysUntil(when, now);
+  const day = days === 0 ? 'today' : days === 1 ? 'tomorrow' : days < 7 ? format(when.date, 'EEE') : format(when.date, 'MMM d');
+  return { label: compact ? day.charAt(0).toUpperCase() + day.slice(1) : `Follow up ${day}`, tone: 'follow', icon: 'reply' };
 }
 
 /** "3 PM" (today), "Thu 10 AM", "Oct 12". */

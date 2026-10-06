@@ -178,6 +178,16 @@ describe('without a PIN', () => {
     expect(await (await login('123456')).json()).toEqual({ ok: true });
   });
 
+  it('still tells the wall computer apart from phones (so only phones are asked to hide the code)', async () => {
+    const local = 'http://localhost:3000';
+    app = createApp({ store, hub: new EventHub(), buildId: 'b', staticDir: null, connectUrl: null });
+    expect(await (await get('/api/session', WALL, {}, local)).json()).toMatchObject({ wallComputer: true });
+    expect(await (await get('/api/session', WALL, { 'X-Forwarded-For': '100.64.0.7' }, local)).json()).toMatchObject({ wallComputer: false });
+    expect(await (await get('/api/session', PHONE)).json()).toMatchObject({ wallComputer: false });
+    app = createApp({ store, hub: new EventHub(), buildId: 'b', staticDir: null, connectUrl: null, trustLocalhost: false });
+    expect(await (await get('/api/session', WALL, {}, local)).json()).toMatchObject({ wallComputer: false });
+  });
+
   it('still refuses names that aren’t this computer’s or the home network’s', async () => {
     app = createApp({ store, hub: new EventHub(), buildId: 'b', staticDir: null, connectUrl: null, allowedHosts: ['board.example.com'] });
     const rebound = await app.request('http://evil.test/api/state');

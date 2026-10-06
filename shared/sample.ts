@@ -1,6 +1,6 @@
 import { addDays, addMonths, endOfMonth, format, getDay, set, startOfDay, startOfWeek } from 'date-fns';
 import { DEFAULT_LANES, DEFAULT_SETTINGS } from './defaults.ts';
-import type { Board, ChecklistItem, Goal, Note, SourceLink } from './types.ts';
+import type { AiRun, Board, ChecklistItem, Goal, Note, SourceLink } from './types.ts';
 
 // Sample board for the preview page and `npm run demo`. Dates are relative to "now"
 // so it always looks current.
@@ -39,32 +39,81 @@ export function makeSampleBoard(now: Date): Board {
   };
   const monday = addDays(weekStart, 1);
 
-  const notes: Note[] = [
-    note(
-      {
-        laneId: 'apps',
-        appType: 'grant',
-        title: 'NSF CAREER proposal',
-        funder: 'NSF',
-        amount: '$500,000',
-        stage: 'Drafting',
-        due: dateOnly(day(3)),
-        pinned: true,
-        body: 'Send the full draft to Dr. Kim for a read-through before submitting.',
-        checklist: items([
-          ['Confirm eligibility', true],
-          ['Project summary', true],
-          ['Budget + justification', false],
-          ['3 letters of collaboration', false],
-          ['Submit on Research.gov', false],
-        ]),
-        links: [
-          link('https://www.nsf.gov/funding/opportunities/career', 'Program page', true),
-          link('https://www.nsf.gov/bfa/dias/policy/papp', 'Budget cap FAQ', false),
-        ],
+  const career = note(
+    {
+      laneId: 'apps',
+      appType: 'grant',
+      title: 'NSF CAREER proposal',
+      funder: 'NSF',
+      amount: '$500,000',
+      stage: 'Drafting',
+      due: dateOnly(day(3)),
+      pinned: true,
+      body: 'Send the full draft to Dr. Kim for a read-through before submitting.',
+      checklist: items([
+        ['Confirm eligibility', true],
+        ['Project summary', true],
+        ['Budget + justification', false],
+        ['3 letters of collaboration', false],
+        ['Submit on Research.gov', false],
+      ]),
+      links: [
+        link('https://www.nsf.gov/funding/opportunities/career', 'Program page', true),
+        link('https://www.nsf.gov/bfa/dias/policy/papp', 'Budget cap FAQ', false),
+      ],
+    },
+    12,
+  );
+
+  // A sticky handed to the AI helper, with what it found on its last two runs.
+  const aiCheck = note(
+    {
+      laneId: 'todo',
+      title: 'Check grants.gov and NSF for new funding calls',
+      ai: {
+        instructions:
+          'Look on grants.gov and nsf.gov for new funding calls for early-career neuroscience researchers. Tell me what is new since last time, with deadlines and links.',
+        schedule: 'daily',
+        time: '08:00',
+        mayAdd: true,
+        mayEdit: false,
       },
-      12,
-    ),
+    },
+    9,
+  );
+  const found = note(
+    {
+      laneId: 'check',
+      parentId: aiCheck.id,
+      addedBy: 'ai',
+      title: 'NIH BRAIN Initiative K99/R00: new early-career award',
+      due: dateOnly(day(70)),
+      body: 'Found by the AI helper. Check the eligibility window (within 4 years of the PhD).',
+      links: [link('https://grants.nih.gov/funding/searchguide', 'NIH funding opportunity', false)],
+    },
+    0,
+  );
+  const aiRuns: AiRun[] = [
+    {
+      id: 'run2',
+      at: at(now, 8),
+      status: 'done',
+      summary: 'One new call: the NIH BRAIN Initiative K99/R00 award for early-career researchers (due in about 10 weeks). I added it to Double-check. Nothing new on NSF CAREER.',
+      links: [{ url: 'https://grants.nih.gov/funding/searchguide', label: 'NIH funding opportunity' }],
+      added: [found.id],
+    },
+    {
+      id: 'run1',
+      at: at(day(-1), 8),
+      status: 'done',
+      summary: 'No new calls that match. NSF updated its CAREER FAQ: the budget cap now includes indirect costs.',
+      links: [{ url: 'https://www.nsf.gov/funding/opportunities/career', label: 'NSF CAREER FAQ' }],
+      added: [],
+    },
+  ];
+
+  const notes: Note[] = [
+    career,
     note(
       {
         laneId: 'apps',
@@ -129,6 +178,8 @@ export function makeSampleBoard(now: Date): Board {
         amount: '$2,500',
         stage: 'Submitted',
         due: dateOnly(day(-2)),
+        sentAt: at(day(-12), 16),
+        followUp: { at: at(day(2), 9), everyDays: 14 },
       },
       30,
     ),
@@ -175,14 +226,21 @@ export function makeSampleBoard(now: Date): Board {
     note(
       {
         laneId: 'todo',
+        parentId: career.id,
+        channel: 'email',
         title: 'Email program officer about CAREER scope',
-        due: dateOnly(day(1)),
+        funder: 'Dr. Patel, NSF',
+        due: dateOnly(day(-6)),
+        sentAt: at(day(-8), 11),
+        followUp: { at: at(day(-1), 9), everyDays: 7 },
+        followedUpFor: at(day(-1), 9),
       },
-      2,
+      9,
     ),
     note(
       {
         laneId: 'todo',
+        parentId: career.id,
         title: 'Ask Dr. Lee for a support letter',
         due: dateOnly(day(5)),
         checklist: items([
@@ -200,6 +258,8 @@ export function makeSampleBoard(now: Date): Board {
       },
       8,
     ),
+    { ...aiCheck, aiLog: aiRuns },
+    found,
     note(
       {
         laneId: 'routine',

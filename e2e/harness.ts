@@ -40,6 +40,8 @@ export class Harness {
   private readonly startAt: string | undefined;
   private readonly pin: string | undefined;
   private readonly withKiosk: boolean;
+  /** The address the wall's "Connect your phone" code shows. */
+  private readonly connectUrl: string | null;
   private kioskProcess: ChildProcess | null = null;
   private kioskHome = '';
   /** The kiosk browser's debugging port. */
@@ -48,12 +50,16 @@ export class Harness {
   kiosk: KioskProbe | null = null;
   private offset = 0;
 
-  constructor(seed: (now: Date) => Board, { query = '', now, pin, kiosk = false }: { query?: string; now?: string; pin?: string; kiosk?: boolean } = {}) {
+  constructor(
+    seed: (now: Date) => Board,
+    { query = '', now, pin, kiosk = false, connectUrl = null }: { query?: string; now?: string; pin?: string; kiosk?: boolean; connectUrl?: string | null } = {},
+  ) {
     this.seed = seed;
     this.query = query;
     this.startAt = now;
     this.pin = pin;
     this.withKiosk = kiosk;
+    this.connectUrl = connectUrl;
   }
 
   async launch(): Promise<void> {
@@ -128,7 +134,7 @@ export class Harness {
       dataDir: this.dataDir,
       seed: this.seed,
       staticDir,
-      connectUrl: null,
+      connectUrl: this.connectUrl,
       buildId,
       now: () => new Date(Date.now() + this.offset),
       reminderTickMs: 250,

@@ -29,7 +29,7 @@ export interface StartOptions {
   reminderTickMs?: number;
   /** A PIN (6–12 digits) to lock the board with; null or missing leaves it open. */
   pin?: string | null;
-  /** With a PIN: let the wall computer's own browser in without it (default true). */
+  /** Let the wall computer's own browser in without the PIN, and tell it apart from phones (default true). */
   trustLocalhost?: boolean;
   allowedHosts?: string[];
   /** How the ticker fetches prices and headlines (tests pass a fake); false turns it off. */
@@ -80,6 +80,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     staticDir: options.staticDir,
     connectUrl: options.connectUrl,
     auth,
+    trustLocalhost: options.trustLocalhost ?? true,
     allowedHosts: options.allowedHosts,
     ticker,
     remote,

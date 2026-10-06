@@ -97,6 +97,43 @@ describe('API', () => {
     expect((await send('PATCH', '/api/notes/missing', { title: 'x' })).status).toBe(404);
   });
 
+  it('links related tasks, keeps follow-ups and AI settings, and leaves server-only fields to the server', async () => {
+    const parent = await addNote({ title: 'NSF CAREER' });
+    const followUp = { at: '2026-10-20T13:00:00.000Z', everyDays: 14 };
+    const ai = { instructions: 'Check grants.gov', schedule: 'daily', time: '08:00', mayAdd: true, mayEdit: false };
+    const child = await addNote({
+      title: 'Email the program officer',
+      parentId: parent.id,
+      channel: 'email',
+      sentAt: '2026-10-06T19:42:00.000Z',
+      followUp,
+      ai,
+      // Only the server sets these.
+      followedUpFor: followUp.at,
+      remindedFor: followUp.at,
+      aiLog: [{ id: 'r1', at: '2026-10-06T08:00:00.000Z', status: 'done', summary: 'Made up', links: [], added: [] }],
+      aiState: { status: 'running', since: '2026-10-06T08:00:00.000Z' },
+      addedBy: 'ai',
+    });
+    expect(child).toMatchObject({ parentId: parent.id, channel: 'email', followUp, ai });
+    for (const field of ['followedUpFor', 'remindedFor', 'aiLog', 'aiState', 'addedBy']) expect(child).not.toHaveProperty(field);
+
+    await send('PATCH', `/api/notes/${child.id}`, { followedUpFor: followUp.at, aiLog: [], addedBy: 'ai', followUp: null, parentId: null });
+    const patched = (await state()).board.notes.find(n => n.id === child.id)!;
+    expect(patched).not.toHaveProperty('followUp');
+    expect(patched).not.toHaveProperty('parentId');
+    for (const field of ['followedUpFor', 'aiLog', 'addedBy']) expect(patched).not.toHaveProperty(field);
+
+    // A note can't be a related task of itself.
+    const self = await send('PATCH', `/api/notes/${parent.id}`, { parentId: parent.id });
+    expect(self.status).toBe(400);
+    expect(await self.json()).toEqual({ error: 'A note can’t be a related task of itself' });
+    const added = await addNote({ id: 'loop1', parentId: 'loop1' });
+    expect(added).not.toHaveProperty('parentId');
+    expect((await send('PATCH', `/api/notes/${child.id}`, { followUp: { at: 'soon', everyDays: 14 } })).status).toBe(400);
+    expect((await send('PATCH', `/api/notes/${child.id}`, { ai: { ...ai, schedule: 'hourly' } })).status).toBe(400);
+  });
+
   it('deletes a note to the trash and restores it', async () => {
     const { id } = await addNote();
     expect((await send('DELETE', `/api/notes/${id}`)).status).toBe(200);

@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { Bell } from 'lucide-react';
+import { Bell, Reply } from 'lucide-react';
 import type { NoteWhen } from '../../../shared/board.ts';
 import { timeLabel } from '../../../shared/dates.ts';
 import type { Lane, Note } from '../../../shared/types.ts';
@@ -23,6 +23,7 @@ export function AgendaList({ items, lanes, now, onOpen }: { items: AgendaItem[];
               <span className="agenda-main">
                 <span className="agenda-title">
                   {kind === 'remind' && <Bell aria-label="Reminder" />}
+                  {kind === 'follow' && <Reply aria-label="Follow up" />}
                   {note.title}
                 </span>
                 <span className="agenda-meta">

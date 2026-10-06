@@ -1,5 +1,25 @@
 import { useState } from 'react';
-import { Bell, ChevronDown, ChevronRight, ChevronUp, Columns3, Download, Lock, Monitor, Moon, MousePointer2, Plus, QrCode, RotateCw, Trash2, TrendingUp, X } from 'lucide-react';
+import { parseISO } from 'date-fns';
+import {
+  Bell,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Columns3,
+  Download,
+  Lock,
+  Monitor,
+  Moon,
+  MousePointer2,
+  Plus,
+  QrCode,
+  RotateCw,
+  Sparkles,
+  Trash2,
+  TrendingUp,
+  X,
+} from 'lucide-react';
+import { describeAiSchedule, whenLabel } from '../../../shared/ai.ts';
 import { lanesInOrder } from '../../../shared/board.ts';
 import { CRYPTO_SYMBOL, MAX_CRYPTO, MAX_NEWS, MAX_STOCKS, NEWS_SOURCES, STOCK_SYMBOL, newsTag } from '../../../shared/ticker.ts';
 import { LANE_KINDS, NOTE_COLORS, type Board, type Lane, type LaneKind, type NightMode, type NightStyle, type Settings, type TickerSettings } from '../../../shared/types.ts';
@@ -282,6 +302,51 @@ function ColumnsSection({ board }: { board: Board }) {
   );
 }
 
+/** The stickies handed to the AI helper, and how it gets set up on the wall computer. */
+function AiSection({ board, now, go }: { board: Board; now: Date; go: (token: string) => void }) {
+  const handed = board.notes.filter(note => note.ai && !note.done);
+  return (
+    <section className="set-group">
+      <h3>
+        <Sparkles aria-hidden="true" /> AI helper
+      </h3>
+      <p className="set-note">
+        Give any sticky to the AI helper with <strong>Give this to AI</strong> in its menu. It looks things up on the web on the schedule you pick, reports back on the
+        sticky, and can add stickies for new things it finds.
+      </p>
+      {handed.length > 0 ? (
+        <ul className="ai-list">
+          {handed.map(note => {
+            const last = note.aiLog?.[0];
+            return (
+              <li key={note.id}>
+                <button type="button" className="remote-card ai-card" onClick={() => go(`note-${note.id}`)}>
+                  <Sparkles aria-hidden="true" />
+                  <span className="remote-card-text">
+                    <span className="remote-card-title">{note.title || 'Untitled note'}</span>
+                    <span className="remote-card-hint">
+                      {note.ai ? describeAiSchedule(note.ai) : ''}
+                      {last ? ` · checked ${whenLabel(parseISO(last.at), now)}` : ''}
+                    </span>
+                  </span>
+                  <ChevronRight aria-hidden="true" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="set-note">No stickies are handed to it yet.</p>
+      )}
+      <p className="set-note">
+        {__DEMO_BUILD__
+          ? 'In this preview the AI updates are samples.'
+          : 'Not set up yet. In the next update it runs on the wall computer with your Claude account (it uses your Max plan, like using Claude yourself), set up with one command.'}
+      </p>
+    </section>
+  );
+}
+
 function PinSection({ go }: { go: (token: string) => void }) {
   const session = useSession();
   let body;
@@ -344,6 +409,26 @@ export function DisplayTab({ board, now, desktop, go }: { board: Board; now: Dat
       <div className="settings">
         <section className="set-group">
           <h3>
+            <QrCode aria-hidden="true" /> Connect a phone
+          </h3>
+          <Switch id="show-qr" checked={wall.showConnect} label="Show the “Connect your phone” code on the wall" onChange={showConnect => setWall({ showConnect })} />
+          <p className="set-note">
+            {connectUrl ? (
+              <>
+                Wall address: <strong>{connectUrl.replace(/^https?:\/\//, '')}</strong>
+              </>
+            ) : (
+              'The wall computer didn’t find its Wi-Fi address, so the code is hidden.'
+            )}
+          </p>
+          <p className="set-note">
+            <strong>Add it to your Home Screen:</strong> open the address in Safari, tap Share, then Add to Home Screen. It opens like an app. If the board has a PIN,
+            enter it once there too.
+          </p>
+        </section>
+
+        <section className="set-group">
+          <h3>
             <Moon aria-hidden="true" /> Night mode
           </h3>
           <div className="seg-group" role="radiogroup" aria-label="When to switch to night mode">
@@ -394,25 +479,7 @@ export function DisplayTab({ board, now, desktop, go }: { board: Board; now: Dat
           )}
         </section>
 
-        <section className="set-group">
-          <h3>
-            <QrCode aria-hidden="true" /> Connect a phone
-          </h3>
-          <Switch id="show-qr" checked={wall.showConnect} label="Show the “Connect your phone” code on the wall" onChange={showConnect => setWall({ showConnect })} />
-          <p className="set-note">
-            {connectUrl ? (
-              <>
-                Wall address: <strong>{connectUrl.replace(/^https?:\/\//, '')}</strong>
-              </>
-            ) : (
-              'The wall computer didn’t find its Wi-Fi address, so the code is hidden.'
-            )}
-          </p>
-          <p className="set-note">
-            <strong>Add it to your Home Screen:</strong> open the address in Safari, tap Share, then Add to Home Screen. It opens like an app. If the board has a PIN,
-            enter it once there too.
-          </p>
-        </section>
+        <AiSection board={board} now={now} go={go} />
 
         <TickerSection ticker={board.settings.ticker} />
 

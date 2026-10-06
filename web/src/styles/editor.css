@@ -2325,13 +2325,41 @@
 
 .reminder {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
   padding: 8px 8px 8px 12px;
   border-radius: 14px;
   background: var(--paper-pink);
   color: var(--paper-ink);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.reminder-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* A nudge to follow up on an application or a sent message. */
+.reminder.is-follow {
+  background: var(--paper-orange);
+  padding-bottom: 10px;
+}
+
+.reminder-kicker {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.reminder-actions,
+.reminder-answers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-left: 28px;
 }
 
 .reminder-bell {
@@ -2851,3 +2879,367 @@
   font-size: 13px;
 }
 
+
+/* Asked once on a phone that just connected: hide the wall's "Connect your phone" code? */
+.pair-prompt {
+  display: flex;
+  gap: 12px;
+  margin: 8px 0 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.pair-prompt-icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-sizing: content-box;
+}
+
+.pair-prompt-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.pair-prompt h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.pair-prompt p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.pair-prompt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Related tasks: the sticky this one is part of, and the ones spun off it. */
+.rel-parent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 4px;
+  padding: 2px 4px 2px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.rel-parent > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+
+.rel-parent-label {
+  flex: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rel-open {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.rel-open > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.rel-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rel-child.is-done .rel-title {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.rel-chip {
+  --s: 150px;
+  flex: none;
+}
+
+@media (hover: hover) {
+  .rel-open:hover {
+    background: var(--surface-2);
+  }
+}
+
+/* Follow up: the question when it goes in or out, then when the next nudge is. */
+.fu-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 10px;
+  border-radius: 14px;
+  background: var(--follow-tint);
+  color: var(--ink);
+}
+
+.fu-question {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.fu-choices,
+.fu-actions,
+.fu-answers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fu-choices .btn-sm {
+  padding: 0 10px;
+}
+
+.fu-choices .btn-ghost {
+  padding: 0 6px;
+}
+
+.fu-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+}
+
+/* A quiet text button. */
+.link-btn {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.fu-status {
+  margin: 0;
+  font-size: 15px;
+}
+
+.fu-status.is-due strong {
+  color: var(--warn);
+}
+
+/* Messages: sent or not yet. */
+.msg-send,
+.msg-sent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.msg-sent-label {
+  color: var(--good);
+  font-weight: 700;
+}
+
+.seg-group .seg svg {
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  vertical-align: -3px;
+}
+
+/* AI helper */
+.ai-give {
+  align-self: flex-start;
+  border-color: color-mix(in srgb, var(--ai-mark) 40%, var(--line));
+  color: var(--ai);
+}
+
+.ai-give svg,
+.ne-section.ai .ne-label svg {
+  color: var(--ai-mark);
+}
+
+.ai-when {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.ai-time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ai-time input {
+  width: auto;
+}
+
+.check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.check-row input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+}
+
+.ai-status {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.ai-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-log h4 {
+  margin: 4px 0 0;
+}
+
+.ai-log ol {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-run {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--ai-mark);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.ai-run.is-error {
+  border-left-color: var(--danger);
+}
+
+.ai-run-time {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ai-run-summary {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.ai-run-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+}
+
+.ai-run-links a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ai-run-links svg {
+  width: 12px;
+  height: 12px;
+  vertical-align: -1px;
+}
+
+.ai-run-added {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ai-run-gone {
+  font-style: italic;
+}
+
+.ai-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-card > svg:first-child {
+  color: var(--ai-mark);
+}

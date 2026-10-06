@@ -144,16 +144,20 @@ export class BoardStore {
     let nextTrash: Trash = trash;
 
     switch (op.type) {
-      case 'note.add':
+      case 'note.add': {
         if (board.notes.some(note => note.id === op.note.id)) throw new StoreError(409, 'That note is already on the board');
         this.lane(op.note.laneId);
-        change = { ...op, note: { ...op.note, updatedAt: stamp } };
+        const { parentId, ...rest } = op.note;
+        // A note can't be a related task of itself.
+        change = { ...op, note: { ...(parentId === op.note.id ? rest : op.note), updatedAt: stamp } };
         nextTrash = { ...trash, notes: trash.notes.filter(entry => entry.note.id !== op.note.id) };
         break;
+      }
 
       case 'note.patch':
         this.note(op.id);
         if (op.patch.laneId !== undefined) this.lane(op.patch.laneId);
+        if (op.patch.parentId === op.id) throw new StoreError(400, 'A note can’t be a related task of itself');
         break;
 
       case 'note.delete': {

@@ -1,5 +1,6 @@
+import { isNudgeTime } from './followups.ts';
 import { pruneCompletions } from './recurring.ts';
-import type { Alert, Board, Goal, Lane, Note, Settings } from './types.ts';
+import type { Alert, Board, Goal, Lane, Note, ServerNoteField, Settings } from './types.ts';
 
 // Every change to the board is one of these operations. The server applies them to
 // the saved board, and phones and computers apply the same ones straight away
@@ -10,7 +11,7 @@ type OptionalKeys<T> = { [K in keyof T]-?: {} extends Pick<T, K> ? K : never }[k
 /** Changed fields only. Optional fields can be cleared with `null` (JSON has no `undefined`). */
 export type Patch<T> = { [K in keyof T]?: K extends OptionalKeys<T> ? T[K] | null : T[K] };
 
-export type NotePatch = Patch<Omit<Note, 'id' | 'createdAt' | 'updatedAt' | 'remindedFor'>>;
+export type NotePatch = Patch<Omit<Note, 'id' | 'createdAt' | 'updatedAt' | ServerNoteField>>;
 export type LanePatch = Patch<Pick<Lane, 'title' | 'color' | 'kind'>>;
 export type GoalPatch = Patch<Omit<Goal, 'id' | 'createdAt'>>;
 export interface SettingsPatch {
@@ -41,18 +42,20 @@ export type Op =
   | { type: 'alert.fire'; id: string; noteId: string }
   | { type: 'alert.dismiss'; id: string };
 
-/** A reminder whose time has come: marked as handled, and shown on the wall if `show`. */
+/** A reminder (or follow-up nudge) whose time has come: marked as handled, and shown on the wall if `show`. */
 export interface ReminderFire {
   noteId: string;
-  /** The reminder time the server saw; skipped if the note's reminder has moved since. */
+  /** The reminder time the server saw; skipped if the note's reminder has moved since. For a nudge, the nudge time. */
   remindAt: string;
   alertId: string;
   show: boolean;
+  /** A nudge to follow up, rather than the note's reminder. */
+  kind?: 'follow';
 }
 
 /**
- * Changes only the server makes. Every 10 seconds it shows reminders that are due and
- * takes down ones that have been up long enough, as one change.
+ * Changes only the server makes. Every 10 seconds it shows reminders and follow-up
+ * nudges that are due and takes down ones that have been up long enough, as one change.
  */
 export type ServerOp = Op | { type: 'reminders.tick'; fire: ReminderFire[]; expire: string[] };
 
@@ -116,8 +119,12 @@ export function applyOp(board: Board, op: ServerOp, now: Date): Board {
 
     case 'note.patch': {
       const next = withNote(board, op.id, note => patchNote(note, op.patch, stamp));
-      // A finished note has nothing left to remind about.
-      return op.patch.done === true && next !== board ? { ...next, alerts: withoutAlertsFor(next.alerts, new Set([op.id])) } : next;
+      if (next === board) return board;
+      // A finished note has nothing left to remind about, and a follow-up that was
+      // dealt with (moved on, or stopped) takes its nudge down.
+      if (op.patch.done === true) return { ...next, alerts: withoutAlertsFor(next.alerts, new Set([op.id])) };
+      if ('followUp' in op.patch) return { ...next, alerts: withoutAlerts(next.alerts, alert => alert.noteId === op.id && alert.kind === 'follow') };
+      return next;
     }
 
     case 'note.delete':
@@ -217,11 +224,18 @@ export function applyOp(board: Board, op: ServerOp, now: Date): Board {
       let notes = board.notes;
       for (const item of op.fire) {
         const note = notes.find(n => n.id === item.noteId);
-        if (!note?.remindAt || Date.parse(note.remindAt) !== Date.parse(item.remindAt)) continue;
-        notes = notes.map(n => (n === note ? { ...note, remindedFor: item.remindAt } : n));
+        if (!note) continue;
+        if (item.kind === 'follow') {
+          if (!note.followUp || !isNudgeTime(note.followUp, item.remindAt)) continue;
+          notes = notes.map(n => (n === note ? { ...note, followedUpFor: item.remindAt } : n));
+        } else {
+          if (!note.remindAt || Date.parse(note.remindAt) !== Date.parse(item.remindAt)) continue;
+          notes = notes.map(n => (n === note ? { ...note, remindedFor: item.remindAt } : n));
+        }
         if (item.show && !note.done) {
           // A reminder already up for this note (from "Try it") makes way, so this one gets its full time.
-          alerts = [...withoutAlertsFor(alerts, new Set([note.id])), { id: item.alertId, noteId: note.id, title: note.title, firedAt: stamp }];
+          const alert: Alert = { id: item.alertId, noteId: note.id, title: note.title, firedAt: stamp, ...(item.kind ? { kind: item.kind } : {}) };
+          alerts = [...withoutAlertsFor(alerts, new Set([note.id])), alert];
         }
       }
       return notes === board.notes && alerts === board.alerts ? board : { ...board, notes, alerts };

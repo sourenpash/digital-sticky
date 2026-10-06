@@ -69,6 +69,50 @@ button.note:active {
   flex: none;
 }
 
+/* Pinned, and handed to (or found by) the AI helper. */
+.note-marks {
+  display: flex;
+  flex: none;
+  gap: calc(var(--s) * 0.025);
+}
+
+.note-ai {
+  color: #5b3fc4;
+  opacity: 0.85;
+}
+
+/* On small squares: "part of" another sticky, in that sticky's color. */
+.note-parent {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: calc(var(--s) * 0.13);
+  height: calc(var(--s) * 0.13);
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow: 0 0 0 calc(var(--s) * 0.008) rgba(42, 39, 35, 0.45);
+}
+
+.note-parent svg {
+  width: 70%;
+  height: 70%;
+  stroke-width: 2.6;
+}
+
+/* "↳" before the sticky a related task belongs to. */
+.note-stage-icon {
+  width: 1.2em;
+  height: 1.2em;
+  margin-right: 0.15em;
+  vertical-align: -0.25em;
+}
+
+/* The selected sticky's related tasks and the sticky they belong to (computers). */
+.note.is-related {
+  outline: 2px dashed color-mix(in srgb, var(--accent) 75%, transparent);
+  outline-offset: 3px;
+}
+
 /* --lines comes from StickyNote: as many whole lines as fit above the badges. */
 .note-title {
   display: -webkit-box;
@@ -205,6 +249,11 @@ button.note:active {
   opacity: 1;
 }
 
+.flag-tasks {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
@@ -237,6 +286,8 @@ button.note:active {
 .chip-muted { background: rgba(42, 39, 35, 0.1); color: rgba(42, 39, 35, 0.72); }
 .chip-repeat { background: rgba(42, 39, 35, 0.1); color: var(--paper-ink); }
 .chip-repeat-now { background: rgba(42, 39, 35, 0.86); color: #fff; }
+.chip-follow { background: rgba(42, 39, 35, 0.1); color: var(--paper-ink); }
+.chip-follow-now { background: #dd4f1c; color: #fff; }
 
 .note.is-done {
   filter: saturate(0.35) brightness(0.8);
@@ -281,8 +332,12 @@ button.note:active {
   font-size: calc(var(--s) * 0.122);
 }
 
-.note.is-compact.is-pinned .note-title {
+.note.is-compact.has-marks .note-title {
   padding-right: calc(var(--s) * 0.1);
+}
+
+.note.is-compact.has-two-marks .note-title {
+  padding-right: calc(var(--s) * 0.22);
 }
 
 .note.is-compact.title-short .note-title {

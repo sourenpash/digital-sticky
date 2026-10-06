@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { compareNotes, lanesInOrder, visibleOnWall } from '../../../shared/board.ts';
+import { compareNotes, lanesInOrder, linksByNote, visibleOnWall } from '../../../shared/board.ts';
 import type { Lane, Note } from '../../../shared/types.ts';
 import { StickyNote } from '../components/StickyNote.tsx';
 import { COMPACT_BELOW_U, layoutBoard } from './fit.ts';
@@ -38,6 +38,7 @@ export function WallColumns({ lanes, notes, now, u }: { lanes: Lane[]; notes: No
     [row.size.w, area.size.h, countsKey, u],
   );
   const compact = layout.size < COMPACT_BELOW_U * u;
+  const links = useMemo(() => linksByNote(notes, lanes), [notes, lanes]);
 
   return (
     <div
@@ -65,7 +66,7 @@ export function WallColumns({ lanes, notes, now, u }: { lanes: Lane[]; notes: No
                     style={{ gridTemplateColumns: `repeat(${fit.cols}, ${layout.size}px)`, gridAutoRows: `${layout.size}px` }}
                   >
                     {laneNotes.slice(0, fit.shown).map(note => (
-                      <StickyNote key={note.id} note={note} lane={lane} now={now} size={layout.size} compact={compact} />
+                      <StickyNote key={note.id} note={note} lane={lane} now={now} size={layout.size} compact={compact} links={links.get(note.id)} />
                     ))}
                     {fit.overflow > 0 && (
                       <div className="note-more" style={{ '--s': `${layout.size}px` } as CSSProperties}>

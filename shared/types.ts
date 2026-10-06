@@ -17,6 +17,59 @@ export const FINISHED_STAGES: readonly Stage[] = ['Submitted', 'Interview', 'Awa
 export const APP_TYPES = ['grant', 'job', 'school', 'fellowship', 'other'] as const;
 export type AppType = (typeof APP_TYPES)[number];
 
+/** A to-do can be a message to send: an email, a text or a call (see messages.ts). */
+export const CHANNELS = ['email', 'text', 'call'] as const;
+export type Channel = (typeof CHANNELS)[number];
+
+/**
+ * Nudges to follow up once an application is in or a message is sent: at `at`, then
+ * again every `everyDays` days (same time of day) until the answer comes in.
+ */
+export interface FollowUp {
+  /** The next nudge (ISO date-time). "I followed up" moves it on. */
+  at: string;
+  /** 0 = just once. */
+  everyDays: number;
+}
+
+export const AI_SCHEDULES = ['once', 'daily', 'weekly'] as const;
+export type AiSchedule = (typeof AI_SCHEDULES)[number];
+
+/** A sticky handed to the AI helper: what it should do, and how often. */
+export interface AiTask {
+  instructions: string;
+  schedule: AiSchedule;
+  /** Local time of day, `HH:MM`. */
+  time: string;
+  /** Weekly only (0 = Sunday). */
+  weekday?: number;
+  /** It may add stickies for new things it finds (as related tasks of this one). */
+  mayAdd: boolean;
+  /** It may tick off and add to this sticky's checklist and links. */
+  mayEdit: boolean;
+}
+
+/** One run of the AI helper. */
+export interface AiRun {
+  id: string;
+  at: string;
+  status: 'done' | 'error';
+  /** What it found (or what went wrong), in a few sentences. */
+  summary: string;
+  links: Array<{ url: string; label?: string }>;
+  /** Stickies it added. */
+  added: string[];
+}
+
+export const AI_STATES = ['queued', 'running', 'needs-setup', 'error'] as const;
+
+/** What the AI helper is doing with a sticky right now. */
+export interface AiState {
+  status: (typeof AI_STATES)[number];
+  message?: string;
+  since: string;
+}
+
 export interface Lane {
   id: string;
   title: string;
@@ -51,12 +104,18 @@ export interface SourceLink {
   verified: boolean;
 }
 
+/** Note fields only the server sets: what it has already nudged about, and the AI helper's work. */
+export const SERVER_NOTE_FIELDS = ['remindedFor', 'followedUpFor', 'aiLog', 'aiState', 'addedBy'] as const;
+export type ServerNoteField = (typeof SERVER_NOTE_FIELDS)[number];
+
 export interface Note {
   id: string;
   laneId: string;
   title: string;
   body: string;
   color?: NoteColor;
+  /** A related task: the sticky it belongs to. */
+  parentId?: string;
   /** `YYYY-MM-DD` for an all-day deadline, or a full ISO date-time. */
   due?: string;
   /** ISO date-time when the wall should show a reminder. */
@@ -66,9 +125,23 @@ export interface Note {
   /** Applications only. */
   appType?: AppType;
   stage?: Stage;
-  /** Who the application goes to: funder, company, school… */
+  /** Who the application goes to: funder, company, school… (for a message: who it's to). */
   funder?: string;
   amount?: string;
+  /** A to-do that's an email, text or call. */
+  channel?: Channel;
+  /** When the message was sent, or the application submitted. */
+  sentAt?: string;
+  followUp?: FollowUp;
+  /** The follow-up time the server has already nudged about (or skipped). */
+  followedUpFor?: string;
+  /** Handed to the AI helper. */
+  ai?: AiTask;
+  /** The AI helper's runs, newest first (the server keeps these). */
+  aiLog?: AiRun[];
+  aiState?: AiState;
+  /** Added by the AI helper. */
+  addedBy?: 'ai';
   checklist: ChecklistItem[];
   links: SourceLink[];
   /** Recurring tasks only. */
@@ -128,6 +201,8 @@ export interface Alert {
   noteId: string;
   title: string;
   firedAt: string;
+  /** A nudge to follow up (see FollowUp), rather than the note's reminder. */
+  kind?: 'follow';
 }
 
 export interface Board {
