@@ -2536,6 +2536,7 @@
 .login-card p {
   margin: 0;
   color: var(--muted);
+  text-wrap: balance;
 }
 
 .login .pin-input {
@@ -2547,6 +2548,61 @@
 
 .login .login-foot {
   font-size: 13px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.login-notice {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--follow-tint);
+  color: var(--ink) !important;
+  font-size: 14px;
+  text-align: left;
+}
+
+.login-or {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  font-size: 13px;
+}
+
+.login-or::before,
+.login-or::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--line);
+}
+
+.login-code-row {
+  display: flex;
+  gap: 8px;
+}
+
+.login-code-row .btn {
+  flex: none;
+}
+
+.login .code-input {
+  min-width: 0;
+  font-size: 20px;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+
+.login .code-input::placeholder {
+  letter-spacing: 0.12em;
+  opacity: 0.45;
 }
 
 @media (hover: hover) {
@@ -3242,4 +3298,204 @@
 
 .ai-card > svg:first-child {
   color: var(--ai-mark);
+}
+
+/* Wall tab: where the board can be used (home Wi-Fi only, or from anywhere) */
+.access-status {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.access-status > svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  color: var(--muted);
+}
+
+.access-status.is-on > svg {
+  color: var(--good);
+}
+
+.access-status p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.access-host {
+  overflow-wrap: anywhere;
+}
+
+/* "Connect another device": a code to scan or type on the new device */
+.invite {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg);
+}
+
+.invite-qr {
+  flex: none;
+  width: 148px;
+  height: 148px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #fff; /* QR codes scan best dark on light, in dark mode too */
+}
+
+.invite-qr svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.invite-qr.is-expired {
+  opacity: 0.15;
+}
+
+.invite-text {
+  display: flex;
+  flex: 1 1 180px;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.invite-text p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.invite-text .invite-code {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Wall screens */
+.screen-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  list-style: none;
+}
+
+.screen-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 8px 10px 12px;
+}
+
+.screen-row + .screen-row {
+  border-top: 1px solid var(--line);
+}
+
+.screen-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--line);
+}
+
+.screen-dot.is-on {
+  background: var(--good);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent);
+}
+
+.screen-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.screen-name {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: 15px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.screen-tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.screen-hint {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.screen-actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+
+.screen-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 14px;
+}
+
+.screen-rename {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.screen-rename input {
+  flex: 1 1 160px;
+}
+
+.screen-new {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.screen-tips {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.screen-tips summary {
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.screen-tips ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding-left: 20px;
 }

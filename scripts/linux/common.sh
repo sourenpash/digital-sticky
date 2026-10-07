@@ -1,4 +1,4 @@
-# Shared by install.sh, update.sh and kiosk.sh (sourced, not run).
+# Shared by install.sh, update.sh, kiosk.sh and anywhere.sh (sourced, not run).
 # shellcheck disable=SC2034 # the variables are for the scripts that source this
 
 APP_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
@@ -30,6 +30,29 @@ die() {
   exit 1
 }
 
+# ask "Question?" y|n: yes or no, with the suggested answer used when nobody can answer
+# (or when the script was told not to ask: YES=1).
+ask() {
+  local reply hint='[y/N]'
+  [ "$2" = y ] && hint='[Y/n]'
+  if [ "${YES:-0}" = 1 ] || [ ! -t 0 ]; then
+    [ "$2" = y ]
+    return
+  fi
+  read -r -p "  $1 $hint " reply || reply=''
+  [[ ${reply:-$2} =~ ^[Yy] ]]
+}
+
+download() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL --retry 3 -o "$2" "$1"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q -O "$2" "$1"
+  else
+    die "Downloading needs curl or wget: sudo apt install curl"
+  fi
+}
+
 # The value of KEY in the board's .env file (the last one wins), without quotes or a
 # trailing # comment.
 env_value() {
@@ -49,6 +72,28 @@ board_port() {
   local port
   port=$(setting PORT)
   echo "${port:-3000}"
+}
+
+# The board's door for the internet, on this computer only (PUBLIC_PORT, or PORT + 1).
+# Prints nothing when it's turned off.
+public_port() {
+  local port
+  port=$(setting PUBLIC_PORT)
+  case ${port,,} in
+    0 | off | false | no) ;;
+    '') echo $(($(board_port) + 1)) ;;
+    *) echo "$port" ;;
+  esac
+}
+
+# Restarts the board's service (set up by install.sh), so it reads .env again. Says how
+# to do it by hand when there's no service.
+restart_board() {
+  if [ -f "$SERVICE_FILE" ] && systemctl --user restart "$SERVICE" 2>/dev/null; then
+    ok "The board restarted with the change"
+  else
+    info "Restart the board to use it: stop it with Ctrl+C, then npm start (or: systemctl --user restart sticky-wall)."
+  fi
 }
 
 # Whether something on this computer accepts connections on port $1.

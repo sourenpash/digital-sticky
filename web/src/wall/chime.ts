@@ -1,12 +1,30 @@
+import { useEffect, useState } from 'react';
+
 type AudioCtor = typeof AudioContext;
 
-/** Two soft tones. Browsers only allow sound after a tap, except in the kiosk (autoplay flag). */
+// The wall's chime. Browsers only play sound once the page has been tapped or clicked,
+// except the wall computer's (its kiosk browser is allowed). One audio context is
+// shared, so a single tap turns sound on for good while the page stays open.
+
+let shared: AudioContext | null = null;
+
+function context(): AudioContext | null {
+  if (shared) return shared;
+  try {
+    const Ctor: AudioCtor | undefined = window.AudioContext ?? (window as unknown as { webkitAudioContext?: AudioCtor }).webkitAudioContext;
+    shared = Ctor ? new Ctor() : null;
+  } catch {
+    shared = null;
+  }
+  return shared;
+}
+
+/** Two soft tones. */
 export function playChime(): void {
   try {
-    const Ctor: AudioCtor | undefined =
-      window.AudioContext ?? (window as unknown as { webkitAudioContext?: AudioCtor }).webkitAudioContext;
-    if (!Ctor) return;
-    const ctx = new Ctor();
+    const ctx = context();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
     [880, 1318.5].forEach((freq, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -20,8 +38,37 @@ export function playChime(): void {
       osc.start(t);
       osc.stop(t + 0.75);
     });
-    window.setTimeout(() => void ctx.close(), 1400);
   } catch {
     // Sound is a nice-to-have; the banner still shows.
   }
+}
+
+/**
+ * True while the browser holds sound back until the wall is tapped (an iPad, a laptop;
+ * never the wall computer). The first tap or click turns it on.
+ */
+export function useSoundBlocked(wanted: boolean): boolean {
+  const [blocked, setBlocked] = useState(false);
+  useEffect(() => {
+    if (!wanted) {
+      setBlocked(false);
+      return;
+    }
+    const ctx = context();
+    if (!ctx) return;
+    const update = () => setBlocked(ctx.state !== 'running');
+    const unlock = () => {
+      if (ctx.state !== 'running') void ctx.resume().then(update, () => {});
+    };
+    update();
+    ctx.addEventListener('statechange', update);
+    window.addEventListener('pointerdown', unlock, { passive: true });
+    window.addEventListener('keydown', unlock);
+    return () => {
+      ctx.removeEventListener('statechange', update);
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, [wanted]);
+  return blocked;
 }

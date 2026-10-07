@@ -6,7 +6,7 @@ import { useSession } from '../store/session.ts';
 import { showToast } from '../store/toasts.ts';
 
 // Once a phone is connected, the wall's "Connect your phone" code has done its job.
-// Phones (not the wall computer) are asked once whether to hide it.
+// Phones (not the wall computer or wall screens) are asked once whether to hide it.
 
 const ASKED_KEY = 'sticky-wall:asked-hide-code';
 /** The preview page asks again after a reload, so the question can be seen more than once. */
@@ -35,7 +35,7 @@ export function PairPrompt({ board }: { board: Board }) {
   const session = useSession();
   const { status } = useSync();
   const [answered, setAnswered] = useState(askedBefore);
-  const isPhone = __DEMO_BUILD__ || (session !== null && !session.wallComputer);
+  const isPhone = __DEMO_BUILD__ || (session !== null && !session.wallComputer && !session.wallScreen);
   if (answered || !board.settings.wall.showConnect || !isPhone || status !== 'live') return null;
 
   const answer = (hide: boolean) => {
@@ -44,7 +44,7 @@ export function PairPrompt({ board }: { board: Board }) {
     if (!hide) return;
     store.updateSettings(s => ({ ...s, wall: { ...s.wall, showConnect: false } }));
     showToast({
-      text: 'The code is hidden. Show it again under Wall, Connect a phone.',
+      text: 'The code is hidden. Show it again under Wall, Connect a phone or computer.',
       actionLabel: 'Undo',
       action: () => store.updateSettings(s => ({ ...s, wall: { ...s.wall, showConnect: true } })),
     });

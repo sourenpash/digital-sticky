@@ -3,13 +3,14 @@
 #   - the board server, as a service that starts when the computer does
 #   - the wall screen, full screen in Chrome or Chromium whenever you log in
 #   - no screen blanking, locking or automatic sleep
+#   - if you like, using the board from anywhere (scripts/linux/anywhere.sh)
 #
 # Run it from the digital-sticky folder as yourself (not with sudo):
 #   ./scripts/linux/install.sh
 # It asks before it downloads or installs anything, and it's safe to run again
 # (that's how to repair the setup, and update.sh runs it after downloading a new version).
 #
-#   -y, --yes   don't ask; take the suggested answers (no PIN is set this way)
+#   -y, --yes   don't ask; take the suggested answers (no PIN, home Wi-Fi only)
 set -euo pipefail
 # shellcheck source-path=SCRIPTDIR source=common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
@@ -21,34 +22,12 @@ for arg in "$@"; do
     -y | --yes) YES=1 ;;
     --update) UPDATE=1 YES=1 ;;
     -h | --help)
-      sed -n '2,13s/^# \{0,1\}//p' "$0"
+      sed -n '2,14s/^# \{0,1\}//p' "$0"
       exit 0
       ;;
     *) die "Unknown option: $arg (try --help)" ;;
   esac
 done
-
-# ask "Question?" y|n: yes or no, with the suggested answer used when nobody can answer.
-ask() {
-  local reply hint='[y/N]'
-  [ "$2" = y ] && hint='[Y/n]'
-  if [ "$YES" = 1 ] || [ ! -t 0 ]; then
-    [ "$2" = y ]
-    return
-  fi
-  read -r -p "  $1 $hint " reply || reply=''
-  [[ ${reply:-$2} =~ ^[Yy] ]]
-}
-
-download() {
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL --retry 3 -o "$2" "$1"
-  elif command -v wget >/dev/null 2>&1; then
-    wget -q -O "$2" "$1"
-  else
-    die "Downloading needs curl or wget: sudo apt install curl"
-  fi
-}
 
 # The official Node.js 24 LTS build, checked against its published SHA-256 sums,
 # unpacked into ~/.local/share/sticky-wall/node (nothing outside your home folder changes).
@@ -90,7 +69,7 @@ cd "$APP_DIR"
 
 # --- 1. Node.js -----------------------------------------------------------------
 
-say "1/7  Node.js"
+say "1/8  Node.js"
 if ! find_node; then
   if ask "Node.js $NODE_MIN or newer is needed. Download the official Node.js 24 LTS for the board (into $PRIVATE_NODE_DIR, no sudo)?" y; then
     install_private_node
@@ -115,14 +94,14 @@ fi
 
 # --- 2. The board -----------------------------------------------------------------
 
-say "2/7  Installing and building the board (a minute or two)"
+say "2/8  Installing and building the board (a minute or two)"
 npm ci --no-audit --no-fund --loglevel=error
 npm run build --silent >/dev/null
 ok "Built"
 
 # --- 3. PIN ---------------------------------------------------------------------
 
-say "3/7  PIN"
+say "3/8  PIN"
 if [ -n "$(env_value BOARD_PIN)" ]; then
   ok "A PIN is set (change it with: npm run pin)"
 elif [ "$FIRST_INSTALL" = 1 ] && [ "$YES" = 0 ] && ask "Lock the board with a PIN? Without one, anyone on your Wi-Fi can open the board and use the wall remote." y; then
@@ -131,9 +110,22 @@ else
   info "No PIN. Anyone on your Wi-Fi can open the board. Set one any time with: npm run pin"
 fi
 
-# --- 4. Browser -----------------------------------------------------------------
+# --- 4. From anywhere -----------------------------------------------------------
 
-say "4/7  Browser for the wall screen"
+say "4/8  From anywhere"
+ANYWHERE_URL=$(env_value PUBLIC_URL)
+if [[ $ANYWHERE_URL == https://*.ts.net ]]; then
+  ok "On: $ANYWHERE_URL (check it with: scripts/linux/anywhere.sh --status)"
+elif [ "$FIRST_INSTALL" = 1 ] && [ "$YES" = 0 ] &&
+  ask "Use the board from anywhere, not only on your Wi-Fi? It's free, with Tailscale, and nothing changes on your router." n; then
+  "$APP_DIR/scripts/linux/anywhere.sh" --no-restart || warn "It isn't on. Set it up any time with: scripts/linux/anywhere.sh"
+else
+  info "Home Wi-Fi only. To use the board from anywhere too, run: scripts/linux/anywhere.sh"
+fi
+
+# --- 5. Browser -----------------------------------------------------------------
+
+say "5/8  Browser for the wall screen"
 if ! BROWSER=$(find_browser); then
   if [ "$YES" = 0 ] && command -v snap >/dev/null 2>&1 && ask "Chrome or Chromium is needed. Install Chromium now (sudo snap install chromium)?" y; then
     sudo snap install chromium
@@ -145,9 +137,9 @@ else
   warn "No Chrome or Chromium: install one (for example: sudo snap install chromium), then run this again."
 fi
 
-# --- 5. Board server ------------------------------------------------------------
+# --- 6. Board server ------------------------------------------------------------
 
-say "5/7  Board server (starts when the computer does)"
+say "6/8  Board server (starts when the computer does)"
 mkdir -p "$(dirname "$SERVICE_FILE")"
 cat >"$SERVICE_FILE" <<UNIT
 [Unit]
@@ -178,9 +170,9 @@ if [ "$(loginctl show-user "$USER" --property=Linger --value 2>/dev/null || true
   fi
 fi
 
-# --- 6. Wall screen -------------------------------------------------------------
+# --- 7. Wall screen -------------------------------------------------------------
 
-say "6/7  Wall screen (opens full screen when you log in)"
+say "7/8  Wall screen (opens full screen when you log in)"
 mkdir -p "$(dirname "$AUTOSTART_FILE")"
 chmod +x "$APP_DIR/scripts/linux/kiosk.sh" 2>/dev/null || true
 cat >"$AUTOSTART_FILE" <<DESKTOP
@@ -209,9 +201,9 @@ StartupWMClass=$LAUNCHER_ID
 DESKTOP
 ok "The Sticky Wall app opens it again ($LAUNCHER_FILE)"
 
-# --- 7. Screen settings -----------------------------------------------------------
+# --- 8. Screen settings -----------------------------------------------------------
 
-say "7/7  Screen settings"
+say "8/8  Screen settings"
 # Over SSH, the desktop's settings are still reachable through its session bus.
 if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bus" ]; then
   export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bus"
@@ -269,6 +261,12 @@ say "${GREEN}Done.${PLAIN}"
 info "On your phone:  $PHONE_URL (same Wi-Fi), or scan the code on the wall"
 info "                (or http://$(hostname -s 2>/dev/null || hostname).local:$PORT, which keeps working if the address changes)"
 info "PIN:            $([ -n "$(env_value BOARD_PIN)" ] && echo on || echo 'off (npm run pin sets one)')"
+ANYWHERE_URL=$(env_value PUBLIC_URL)
+if [[ $ANYWHERE_URL == https://*.ts.net ]]; then
+  info "From anywhere:  $ANYWHERE_URL"
+else
+  info "From anywhere:  off (scripts/linux/anywhere.sh turns it on)"
+fi
 info "Time zone:      $TIMEZONE (the wall's clock, night mode and reminders follow it;"
 info "                change it with: sudo timedatectl set-timezone Area/City; see timedatectl list-timezones)"
 info "Update later:   scripts/linux/update.sh"

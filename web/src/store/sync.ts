@@ -185,7 +185,14 @@ export class SyncEngine {
       try {
         do {
           this.loadAgain = false;
-          const next = await this.transport.load();
+          let next: StateResponse;
+          try {
+            next = await this.transport.load();
+          } catch (error) {
+            // Asked for again meanwhile (just signed in, say): this answer may be from before.
+            if (error instanceof HttpError && error.status === 401 && this.loadAgain) continue;
+            throw error;
+          }
           this.reachable = true;
           const wasLocked = this.locked;
           this.locked = false;

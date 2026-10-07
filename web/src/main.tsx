@@ -1,9 +1,12 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
+import { currentToken, navigate, startToken } from './lib/route.ts';
 import { applyPresetsFromUrl } from './proto/presets.ts';
 import { engine } from './store/board.ts';
 import { startLiveUpdates } from './store/live.ts';
+import { setWallScreenHint, wallScreenHint } from './store/screens.ts';
+import { currentSession, refreshSession } from './store/session.ts';
 import { refreshTicker } from './store/ticker.ts';
 import './styles/fonts.css';
 import './styles/tokens.css';
@@ -20,6 +23,29 @@ else {
   startLiveUpdates(engine, {
     onReloadRequest: () => window.location.hash === '#wall' && window.location.reload(),
     onTicker: () => void refreshTicker(),
+  });
+  openWallOnWallScreens();
+}
+
+/**
+ * A device set up as a wall screen opens straight to the wall (its Home Screen app opens
+ * at #board). It remembers being one, so the wall shows at once; the server confirms.
+ */
+function openWallOnWallScreens(): void {
+  const atStart = startToken === '' || startToken === 'board';
+  const guessed = atStart && wallScreenHint();
+  if (guessed) navigate('wall', { replace: true });
+  void refreshSession().then(() => {
+    const session = currentSession();
+    if (!session) return;
+    if (session.wallScreen && !wallScreenHint()) {
+      setWallScreenHint(true);
+      if (atStart && currentToken() === startToken) navigate('wall', { replace: true });
+    } else if (!session.wallScreen && wallScreenHint()) {
+      // Removed in the Wall tab meanwhile: open the board as asked after all.
+      setWallScreenHint(false);
+      if (guessed && currentToken() === 'wall') navigate(startToken || 'board', { replace: true });
+    }
   });
 }
 // Word hyphenation on the notes needs a language; the preview page has no <html lang>.

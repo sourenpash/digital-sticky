@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { format } from 'date-fns';
 import { Hono, type Context } from 'hono';
@@ -6,7 +7,7 @@ import { compress } from 'hono/compress';
 import { secureHeaders } from 'hono/secure-headers';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import type { StateResponse } from '../shared/api.ts';
+import type { AnywhereStatus, PairCode, ScreenInfo, SessionResponse, StateResponse, WallCode } from '../shared/api.ts';
 import {
   completionsChangeSchema,
   describeIssues,
@@ -19,14 +20,16 @@ import {
   newNoteSchema,
   notePatchSchema,
   remoteRequestSchema,
+  screenNameSchema,
   settingsPatchSchema,
 } from '../shared/schema.ts';
 import type { RemoteStatus } from '../shared/remote.ts';
 import type { Goal, Lane, Note } from '../shared/types.ts';
-import { fromThisComputer, type Auth } from './auth.ts';
+import { Auth, fromThisComputer, isOutside, type LoginLimiter } from './auth.ts';
 import type { EventHub } from './events.ts';
 import { hostAllowed } from './hosts.ts';
 import { RemoteError, type KioskRemote } from './remote.ts';
+import { LOCAL_SCREEN_ID, LOCAL_SCREEN_NAME, Screens } from './screens.ts';
 import type { TickerFeed } from './ticker.ts';
 import { newId, StoreError, type BoardStore } from './store.ts';
 
@@ -39,10 +42,14 @@ export interface AppOptions {
   staticDir: string | null;
   /** Address phones can open, shown on the wall's "Connect your phone" card. */
   connectUrl: string | null | (() => string | null);
-  /** Set when there's a PIN: everything but signing in needs it. */
+  /** Signing in (the PIN, cookies, sign-in codes). Without one the board is open at home. */
   auth?: Auth | null;
   /** Count the browser on this computer (localhost) as the wall computer (default true). */
   trustLocalhost?: boolean;
+  /** The board's internet address (Tailscale Funnel), when it can be used from anywhere. */
+  anywhereUrl?: string | null;
+  /** The devices showing the wall (made here when not passed). */
+  screens?: Screens | null;
   /** Names to answer to besides this computer's own and home-network ones. */
   allowedHosts?: readonly string[];
   /** Live prices and headlines for the wall's ticker. */
@@ -53,9 +60,10 @@ export interface AppOptions {
   closeWall?: (() => Promise<void>) | null;
 }
 
-/** Open without the PIN: checking the server is up, and signing in and out. */
-const OPEN_PATHS = new Set(['/api/health', '/api/session', '/api/login', '/api/logout']);
+/** Open without signing in: checking the server is up, and signing in and out. */
+const OPEN_PATHS = new Set(['/api/health', '/api/session', '/api/login', '/api/logout', '/api/pair']);
 const loginSchema = z.object({ pin: z.string().max(64) });
+const pairSchema = z.object({ code: z.string().min(1).max(64) });
 const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /** Every change answers with the revision that includes it (and the server run it belongs to). */
@@ -85,8 +93,10 @@ export function createApp({
   buildId,
   staticDir,
   connectUrl,
-  auth = null,
+  auth: givenAuth = null,
   trustLocalhost = true,
+  anywhereUrl = null,
+  screens: givenScreens = null,
   allowedHosts = [],
   ticker = null,
   remote = null,
@@ -94,6 +104,13 @@ export function createApp({
 }: AppOptions): Hono {
   const app = new Hono();
   const stamp = () => store.now().toISOString();
+  const auth = givenAuth ?? new Auth({ pin: null, secret: randomBytes(32), trustLocalhost });
+  const screens = givenScreens ?? new Screens(store, hub);
+  /** The wall screen this device was set up as, if it still is one. */
+  const screenFor = async (c: Context) => {
+    const id = await auth.screenId(c);
+    return id ? (store.screens.find(screen => screen.id === id) ?? null) : null;
+  };
 
   app.use(async (c, next) => {
     const host = new URL(c.req.url).hostname;
@@ -123,52 +140,169 @@ export function createApp({
     await next();
   });
 
-  if (auth) {
-    api.use(async (c, next) => {
-      if (OPEN_PATHS.has(c.req.path) || auth.isWallComputer(c)) return next();
-      const session = await auth.session(c);
-      if (!session.signedIn) return c.json({ error: 'Enter the PIN to open the board', locked: true }, 401);
-      // Keep devices that are used signed in (only on plain requests; a live stream can't set cookies).
-      if (session.renew && c.req.path === '/api/state') await auth.signIn(c);
-      return next();
-    });
-  }
+  // Who may use the board: at home, everyone when there's no PIN. Otherwise, and always
+  // from the internet, signed-in devices, plus the wall computer and the wall screens.
+  api.use(async (c, next) => {
+    if (OPEN_PATHS.has(c.req.path) || !auth.needsSignIn(c) || auth.isWallComputer(c) || (await screenFor(c))) return next();
+    const session = await auth.session(c);
+    if (!session.signedIn) {
+      return c.json({ error: auth.pinSet ? 'Enter the PIN to open the board' : 'Scan the code on your wall to sign in', locked: true }, 401);
+    }
+    // Keep devices that are used signed in (only on plain requests; a live stream can't set cookies).
+    if (session.renew && c.req.path === '/api/state') await auth.signIn(c);
+    return next();
+  });
 
   api.get('/health', c => c.json({ ok: true, rev: store.rev, buildId }));
 
   api.get('/session', async c => {
     c.header('Cache-Control', 'no-store');
-    // The app asks phones (not the wall computer) whether to hide the "Connect your phone" code.
-    if (!auth) return c.json({ pinSet: false, signedIn: true, wallComputer: trustLocalhost && fromThisComputer(c) });
+    // The app tells the wall apart from phones: phones are asked whether to hide the "Connect your phone" code.
     const wallComputer = auth.isWallComputer(c);
+    const screenId = wallComputer ? null : await auth.screenId(c);
+    const wallScreen = screenId !== null && store.screens.some(screen => screen.id === screenId);
+    // A wall screen's cookie is renewed whenever it opens; a removed one's is cleared.
+    if (screenId !== null) {
+      if (wallScreen) await auth.setScreen(c, screenId);
+      else auth.clearScreen(c);
+    }
     const session = await auth.session(c);
     if (session.renew) await auth.signIn(c);
-    return c.json({ pinSet: true, signedIn: wallComputer || session.signedIn, wallComputer });
+    const signedIn = !auth.needsSignIn(c) || wallComputer || wallScreen || session.signedIn;
+    return c.json({ pinSet: auth.pinSet, signedIn, wallComputer, wallScreen, outside: isOutside(c) } satisfies SessionResponse);
   });
 
-  api.post('/login', async c => {
-    if (!auth) return c.json({ ok: true });
-    const { pin } = await readBody(c, loginSchema);
+  /** Counts a sign-in try against this device's limit: the seconds to wait, or 0 to go ahead. */
+  const tryLimit = (c: Context, now: number, limiter: LoginLimiter) => {
     const client = auth.clientKey(c);
+    const wait = limiter.waitFor(client, now);
+    if (wait === 0) limiter.tried(client, now);
+    return { wait, succeeded: () => limiter.succeeded(client, now) };
+  };
+
+  api.post('/login', async c => {
+    const { pin } = await readBody(c, loginSchema);
+    if (!auth.needsSignIn(c)) return c.json({ ok: true });
+    if (!auth.pinSet) return c.json({ error: 'This board has no PIN. Scan the code on your wall to sign in.' }, 400);
     const now = store.now().getTime();
-    const wait = auth.limiter.waitFor(client, now);
-    if (wait > 0) {
-      c.header('Retry-After', String(wait));
-      return c.json({ error: 'Too many wrong PINs. Try again later.', retryAfter: wait }, 429);
+    const limit = tryLimit(c, now, auth.limiterFor(c));
+    if (limit.wait > 0) {
+      c.header('Retry-After', String(limit.wait));
+      return c.json({ error: 'Too many wrong PINs. Try again later.', retryAfter: limit.wait }, 429);
     }
-    auth.limiter.tried(client, now);
     if (!auth.checkPin(pin)) {
       await pause(300);
       return c.json({ error: 'That PIN isn’t right' }, 401);
     }
-    auth.limiter.succeeded(client, now);
+    limit.succeeded();
+    await auth.signIn(c);
+    return c.json({ ok: true });
+  });
+
+  // Signing in by scanning a code: the one on the wall, or one a signed-in device shows.
+  api.post('/pair', async c => {
+    const { code } = await readBody(c, pairSchema);
+    const now = store.now().getTime();
+    if (!auth.needsSignIn(c)) {
+      // Open anyway. Still, the code is used up, and the wall shows a fresh one.
+      if (auth.codes.redeem(code, now)) hub.broadcast('pair', {});
+      return c.json({ ok: true });
+    }
+    const limit = tryLimit(c, now, auth.codeLimiter);
+    if (limit.wait > 0) {
+      c.header('Retry-After', String(limit.wait));
+      return c.json({ error: 'Too many tries. Try again later.', retryAfter: limit.wait }, 429);
+    }
+    if (!auth.codes.redeem(code, now)) {
+      await pause(300);
+      return c.json({ error: 'That code isn’t right, or it has expired. Use the one on the wall now.', expired: true }, 401);
+    }
+    hub.broadcast('pair', {}); // the wall shows a fresh code
+    limit.succeeded();
     await auth.signIn(c);
     return c.json({ ok: true });
   });
 
   api.post('/logout', c => {
-    auth?.signOut(c);
+    auth.signOut(c);
     return c.json({ ok: true });
+  });
+
+  // The code the wall shows in its QR code, so phones sign in by scanning it. Only the
+  // wall (the wall computer and wall screens) gets it, and never over the internet.
+  api.get('/pair-code', async c => {
+    c.header('Cache-Control', 'no-store');
+    if (isOutside(c) || !(auth.isWallComputer(c) || (await screenFor(c)))) return c.json({ error: 'Only the wall shows sign-in codes' }, 403);
+    if (!auth.pinSet && !anywhereUrl) return c.json({ code: null } satisfies WallCode);
+    return c.json(auth.codes.current(store.now().getTime()) satisfies WallCode);
+  });
+
+  // "Connect another device": a code for a signed-in device to show, for the new one to scan.
+  api.post('/pair-code', c => {
+    c.header('Cache-Control', 'no-store');
+    return c.json(auth.codes.issue(store.now().getTime()) satisfies PairCode, 201);
+  });
+
+  // Whether the board can be used from anywhere (set up with scripts/linux/anywhere.sh).
+  api.get('/anywhere', c => {
+    c.header('Cache-Control', 'no-store');
+    return c.json({ url: anywhereUrl } satisfies AnywhereStatus);
+  });
+
+  // Wall screens: the devices set up to show the wall. The wall computer adds itself.
+  const screenList = async (c: Context): Promise<ScreenInfo[]> =>
+    screens.list(auth.isWallComputer(c) ? LOCAL_SCREEN_ID : await auth.screenId(c));
+
+  api.get('/screens', async c => {
+    c.header('Cache-Control', 'no-store');
+    return c.json({ screens: await screenList(c) });
+  });
+
+  // "Use this device as a wall screen" (or rename it, if it already is one).
+  api.post('/screens', async c => {
+    const { name } = await readBody(c, screenNameSchema);
+    let id: string;
+    if (auth.isWallComputer(c)) {
+      id = store.addScreen(LOCAL_SCREEN_NAME, LOCAL_SCREEN_ID).id;
+    } else {
+      const current = await screenFor(c);
+      id = current ? store.renameScreen(current.id, name).id : store.addScreen(name).id;
+      await auth.setScreen(c, id);
+    }
+    screens.changed();
+    return c.json({ screen: screens.list(id).find(screen => screen.id === id) }, 201);
+  });
+
+  api.patch('/screens/:id', async c => {
+    const { name } = await readBody(c, screenNameSchema);
+    store.renameScreen(c.req.param('id'), name);
+    screens.changed();
+    return c.json({ ok: true });
+  });
+
+  // Removing a screen also signs it out (unless it signed in some other way).
+  api.delete('/screens/:id', async c => {
+    const id = c.req.param('id');
+    store.removeScreen(id);
+    screens.forget(id);
+    if ((await auth.screenId(c)) === id) auth.clearScreen(c);
+    screens.changed();
+    return c.json({ ok: true });
+  });
+
+  // A wall screen showing the wall checks in every minute.
+  api.post('/screens/here', async c => {
+    let id: string | null = null;
+    if (auth.isWallComputer(c)) {
+      id = store.addScreen(LOCAL_SCREEN_NAME, LOCAL_SCREEN_ID).id;
+    } else {
+      const screen = await screenFor(c);
+      if (screen) id = screen.id;
+      else if ((await auth.screenId(c)) !== null) auth.clearScreen(c); // removed in the Wall tab
+    }
+    if (id === null) return c.json({ screen: null });
+    screens.checkIn(id);
+    return c.json({ screen: (await screenList(c)).find(screen => screen.id === id) ?? null });
   });
 
   api.get('/state', c => {

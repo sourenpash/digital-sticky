@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SAMPLE_PAIR_CODE } from '../../../shared/sample.ts';
 import type { Board } from '../../../shared/types.ts';
 import { EditorApp, type EditorRoute } from '../editor/EditorApp.tsx';
 import { Login } from '../editor/Login.tsx';
@@ -39,7 +40,7 @@ export function DemoSplit({ board, now, connectUrl }: { board: Board; now: Date;
         </div>
         <figure className="demo-wall">
           <div className="monitor">
-            <Wall board={board} now={now} connectUrl={connectUrl} sound cursor />
+            <Wall board={board} now={now} connectUrl={connectUrl} pairCode={__DEMO_BUILD__ ? SAMPLE_PAIR_CODE : null} sound cursor />
           </div>
           <figcaption>The bedroom wall screen, scaled down</figcaption>
         </figure>

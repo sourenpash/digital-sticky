@@ -3,28 +3,10 @@
 // scripts/linux/install.sh, the board restarts to use it; otherwise restart it yourself.
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { readFile, rename, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
-
-const ENV_FILE = '.env';
-const PIN_LINE = /^\s*BOARD_PIN\s*=/;
-
-async function readEnv(): Promise<string[]> {
-  try {
-    return (await readFile(ENV_FILE, 'utf8')).split('\n').filter((line, i, all) => line !== '' || i < all.length - 1);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
-    throw error;
-  }
-}
-
-async function writeEnv(lines: string[]): Promise<void> {
-  const temp = `${ENV_FILE}.${process.pid}.tmp`;
-  await writeFile(temp, lines.length ? `${lines.join('\n')}\n` : '', { mode: 0o600, flag: 'wx' });
-  await rename(temp, ENV_FILE);
-}
+import { setEnv } from './envFile.ts';
 
 /** Lines typed or piped in. Typed ones aren't shown on screen. */
 function makePrompt(): { ask: (question: string) => Promise<string>; close: () => void } {
@@ -85,10 +67,8 @@ function restartBoard(): void {
   console.log('Restart the board to use it: stop it with Ctrl+C, then npm start (or: systemctl --user restart sticky-wall).');
 }
 
-const kept = (await readEnv()).filter(line => !PIN_LINE.test(line));
-
 if (process.argv.includes('--off')) {
-  await writeEnv(kept);
+  await setEnv('BOARD_PIN', null);
   console.log('PIN removed: anyone on your Wi-Fi can open the board.');
   restartBoard();
   process.exit(0);
@@ -107,6 +87,6 @@ if (again !== pin) {
   console.error("Those didn't match. Nothing was changed.");
   process.exit(1);
 }
-await writeEnv([...kept, `BOARD_PIN=${pin}`]);
-console.log("PIN saved. Each phone or computer asks for it once; the wall computer itself doesn't need it.");
+await setEnv('BOARD_PIN', pin);
+console.log("PIN saved. Each phone or computer signs in once (with the PIN, or the code on the wall); the wall computer itself doesn't need it.");
 restartBoard();

@@ -8,7 +8,7 @@ const VIEWS = [
   { token: 'demo', label: 'Side by side' },
   { token: 'wall', label: 'Wall' },
   { token: 'board', label: 'Phone / computer' },
-  { token: 'login', label: 'PIN screen' },
+  { token: 'login', label: 'Sign-in screen' },
 ];
 
 /** Floating panel for trying the prototype's screens and states. Not part of the real app. */

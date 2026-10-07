@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
+import type { WallCode } from '../../../shared/api.ts';
 import { REMOTE_CURSOR_ID } from '../../../shared/remote.ts';
+import { CHECK_IN_MS, checkIn, setWallScreenHint, wallScreenHint } from '../store/screens.ts';
+import { onServerEvent } from '../store/serverEvents.ts';
+import { refreshSession } from '../store/session.ts';
 import type { SyncStatus } from '../store/sync.ts';
 
 // Things only the real wall screen (the #wall page) does.
@@ -95,4 +99,67 @@ export function useBurnInDrift(everyMs = 10 * 60_000): [number, number] {
     return () => window.clearInterval(id);
   }, [everyMs]);
   return DRIFT[step]!;
+}
+
+/**
+ * The sign-in code for the wall to show in its "Connect your phone" QR code, while this
+ * is the wall computer or a wall screen. A fresh one comes every couple of minutes, and
+ * right after someone signs in with it.
+ */
+export function useWallCode(enabled: boolean): string | null {
+  const [code, setCode] = useState<string | null>(null);
+  useEffect(() => {
+    if (!enabled) {
+      setCode(null);
+      return;
+    }
+    let live = true;
+    const load = () =>
+      fetch(new URL('api/pair-code', document.baseURI), { cache: 'no-store' })
+        .then(response => (response.ok ? (response.json() as Promise<WallCode>) : null))
+        .then(
+          data => {
+            if (live && data) setCode(data.code);
+          },
+          () => {},
+        );
+    void load();
+    const timer = window.setInterval(() => void load(), 30_000);
+    const off = onServerEvent('pair', () => void load());
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+      off();
+    };
+  }, [enabled]);
+  return code;
+}
+
+/**
+ * While this device shows the wall as a wall screen (or is the wall computer), it checks
+ * in every minute so the Wall tab can say it's showing. If it was removed meanwhile, it
+ * forgets it was one.
+ */
+export function useCheckIn(enabled: boolean): void {
+  useEffect(() => {
+    if (!enabled || __DEMO_BUILD__) return;
+    let stopped = false;
+    let timer = 0;
+    const beat = async () => {
+      const screen = await checkIn();
+      if (stopped || screen !== null) return;
+      // Not (or no longer) a wall screen: stop checking in.
+      window.clearInterval(timer);
+      if (wallScreenHint()) {
+        setWallScreenHint(false);
+        void refreshSession();
+      }
+    };
+    timer = window.setInterval(() => void beat(), CHECK_IN_MS);
+    void beat();
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [enabled]);
 }

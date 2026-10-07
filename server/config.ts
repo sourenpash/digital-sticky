@@ -16,6 +16,11 @@ export interface Config {
   allowedHosts: string[];
   /** The wall browser's debugging port (for the phone remote), or null to turn the remote off. */
   kioskDebugPort: number | null;
+  /**
+   * A second port, on this computer only, for requests from the internet (Tailscale Funnel
+   * forwards to it). Everything arriving there needs signing in. Null turns it off.
+   */
+  publicPort: number | null;
 }
 
 /** Settings come from environment variables (or a .env file) and a few flags. */
@@ -32,6 +37,14 @@ export function readConfig(env: NodeJS.ProcessEnv, argv: string[]): Config {
   if (kioskDebugPort !== null && (!Number.isInteger(kioskDebugPort) || kioskDebugPort < 1 || kioskDebugPort > 65_535 || kioskDebugPort === port)) {
     throw new Error(`KIOSK_DEBUG_PORT must be a port number other than PORT, or "off", not "${env.KIOSK_DEBUG_PORT}"`);
   }
+  const outside = (env.PUBLIC_PORT ?? '').trim();
+  const publicPort = /^(0|off|false|no)$/i.test(outside) ? null : Number(outside || port + 1);
+  if (
+    publicPort !== null &&
+    (!Number.isInteger(publicPort) || publicPort < 1 || publicPort > 65_535 || publicPort === port || publicPort === kioskDebugPort)
+  ) {
+    throw new Error(`PUBLIC_PORT must be a port number other than PORT and KIOSK_DEBUG_PORT, or "off", not "${env.PUBLIC_PORT}"`);
+  }
   const publicHost = env.PUBLIC_URL ? hostOf(env.PUBLIC_URL) : null;
   const allowedHosts = (env.ALLOWED_HOSTS ?? '')
     .split(',')
@@ -47,6 +60,7 @@ export function readConfig(env: NodeJS.ProcessEnv, argv: string[]): Config {
     trustLocalhost: !/^(0|false|no|off)$/i.test(env.TRUST_LOCALHOST ?? ''),
     allowedHosts: publicHost ? [...allowedHosts, publicHost] : allowedHosts,
     kioskDebugPort,
+    publicPort,
   };
 }
 

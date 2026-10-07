@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path';
 import { chromium, type Page } from 'playwright-core';
 import type { StateResponse } from '../shared/api.ts';
 import { makeEmptyBoard } from '../shared/defaults.ts';
-import { makeSampleBoard, SAMPLE_CONNECT_URL } from '../shared/sample.ts';
+import { makeSampleBoard, SAMPLE_ANYWHERE_URL, SAMPLE_CONNECT_URL } from '../shared/sample.ts';
 import { startServer, type RunningServer } from '../server/server.ts';
 import { fakeTickerFetch } from '../e2e/tickerFixtures.ts';
 
@@ -15,6 +15,8 @@ const OUT = 'docs/screenshots'; // curated shots referenced by the README
 const REVIEW = '.screenshots'; // everything else (git-ignored)
 const NOW = '2026-09-30T19:42:00'; // a Wednesday evening, so the sample dates are stable
 const PORT = 4173;
+/** The board's door for the internet, for shots of using it from anywhere. */
+const PUBLIC_PORT = 4174;
 
 interface Api {
   get(path: string): Promise<unknown>;
@@ -30,8 +32,8 @@ interface Shot {
   colorScheme?: 'light' | 'dark';
   /** Start from a brand-new board instead of the sample one. */
   empty?: boolean;
-  /** Change the board through the API before the page opens. */
-  setup?: (api: Api) => Promise<void>;
+  /** Change the board through the API (or the server) before the page opens. */
+  setup?: (api: Api, server: RunningServer) => Promise<void>;
   act?: (page: Page, server: RunningServer, kiosk: Page | null) => Promise<void>;
   /** Commit this one to docs/screenshots. */
   keep?: boolean;
@@ -39,6 +41,12 @@ interface Shot {
   pin?: boolean;
   /** Open the page as a phone on the Wi-Fi (not the wall computer), without a PIN. */
   away?: boolean;
+  /** The board can be used from anywhere (Tailscale Funnel's address, and the internet door). */
+  anywhere?: boolean;
+  /** Open the page through the internet door (implies `anywhere`). */
+  outside?: boolean;
+  /** A browser that holds sound back until a tap (an iPad's), unlike the wall computer's. */
+  soundBlocked?: boolean;
   /** Run the wall computer's browser too (for the remote), showing what this opens. */
   kiosk?: (kiosk: Page, base: string) => Promise<void>;
   /** Save the wall computer's browser instead of the page. */
@@ -105,6 +113,14 @@ const site = (title: string, body: string) =>
 const recipes = site('Recipes · Search', '<form><h1>What are we cooking?</h1><input id="q" placeholder="Search recipes" autofocus></form>');
 const playlists = site('My playlists', '<main><h1>Evening focus</h1><p>42 songs</p></main>');
 const waitConnected = (page: Page) => page.getByText('Connected', { exact: true }).waitFor({ timeout: 10_000 });
+
+/** Wall screens: the wall computer showing the wall now, and an iPad last seen 3 hours ago. */
+const wallScreens = async (api: Api, server: RunningServer) => {
+  await api.send('POST', '/api/screens/here', {});
+  const ipad = server.store.addScreen('Kitchen iPad');
+  server.store.markScreenSeen(ipad.id, new Date(Date.parse(NOW) - 3 * 3_600_000));
+};
+const ipad = { width: 1180, height: 820 };
 
 const shots: Shot[] = [
   { keep: true, name: 'wall-day', hash: 'wall', viewport: hd },
@@ -312,6 +328,49 @@ const shots: Shot[] = [
   { name: 'desktop-board-closed', hash: 'board', viewport: desktop },
   { name: 'desktop-calendar', hash: 'calendar', viewport: desktop },
   { name: 'desktop-wall-settings', hash: 'display', viewport: desktop },
+  // Using the board from anywhere, and wall screens.
+  { keep: true, name: 'wall-anywhere-code', hash: 'wall', viewport: hd, anywhere: true, setup: api => api.send('PATCH', '/api/settings', { wall: { showConnect: true } }).then(() => {}) },
+  { keep: true, name: 'phone-sign-in-anywhere', hash: 'board', ...onPhone, outside: true },
+  {
+    keep: true,
+    name: 'phone-connect-anywhere',
+    hash: 'display',
+    ...onPhone,
+    anywhere: true,
+    away: true,
+    act: async page => {
+      await page.getByRole('button', { name: 'Connect another device' }).click();
+      await page.locator('.invite-code').waitFor();
+      await showSetting('Connect a phone or computer')(page);
+    },
+  },
+  { name: 'phone-connect-home', hash: 'display', ...onPhone, away: true, act: showSetting('Connect a phone or computer') },
+  { keep: true, name: 'phone-wall-screens', hash: 'display', ...onPhone, away: true, setup: wallScreens, act: showSetting('Wall screens') },
+  { name: 'phone-wall-screens-dark', hash: 'display', ...onPhone, away: true, colorScheme: 'dark', setup: wallScreens, act: showSetting('Wall screens') },
+  {
+    keep: true,
+    name: 'ipad-wall-screen',
+    hash: 'display',
+    viewport: ipad,
+    scale: 2,
+    mobile: true,
+    away: true,
+    soundBlocked: true,
+    act: async page => {
+      await page.getByRole('button', { name: 'Use this device as a wall screen' }).click();
+      await page.getByLabel('Name for this wall screen').fill('Kitchen iPad');
+      await page.getByRole('button', { name: 'Show the wall here' }).click();
+      await page.locator('.wall-standalone').waitFor();
+      // Opened afresh (as from the Home Screen), before anyone has tapped it.
+      await page.reload();
+      await page.locator('.wall-standalone .wall').waitFor();
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(500);
+      await page.mouse.move(700, 400);
+      await page.getByRole('button', { name: 'Edit the board' }).and(page.locator('.is-shown')).waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
 ];
 
 const filter = process.argv[2];
@@ -320,7 +379,9 @@ const { buildId } = JSON.parse(await readFile(join(staticDir, 'build.json'), 'ut
 await mkdir(OUT, { recursive: true });
 await mkdir(REVIEW, { recursive: true });
 const executablePath = process.env.PW_CHROMIUM ?? '/opt/pw-browsers/chromium';
-const browser = await chromium.launch({ executablePath });
+// Like the wall computer's kiosk browser, which may play the chime without a tap first.
+const browser = await chromium.launch({ executablePath, args: ['--autoplay-policy=no-user-gesture-required'] });
+let tapFirstBrowser: Awaited<ReturnType<typeof chromium.launch>> | null = null;
 const KIOSK_DEBUG_PORT = 9555;
 
 try {
@@ -329,13 +390,15 @@ try {
     const dataDir = await mkdtemp(join(tmpdir(), 'sticky-shot-'));
     // The server's clock starts at NOW too, so reminders go off as they would that evening.
     const offset = Date.parse(NOW) - Date.now();
+    const anywhere = shot.anywhere || shot.outside;
     const server = await startServer({
       port: PORT,
       host: '127.0.0.1',
       dataDir,
       seed: shot.empty ? makeEmptyBoard : () => makeSampleBoard(new Date(NOW)),
       staticDir,
-      connectUrl: SAMPLE_CONNECT_URL,
+      connectUrl: anywhere ? SAMPLE_ANYWHERE_URL : SAMPLE_CONNECT_URL,
+      ...(anywhere ? { publicPort: PUBLIC_PORT, anywhereUrl: SAMPLE_ANYWHERE_URL, outsideHttps: false } : {}),
       buildId,
       now: () => new Date(Date.now() + offset),
       tickerFetch: fakeTickerFetch,
@@ -353,9 +416,10 @@ try {
       send: async (method, path, body) =>
         (await fetch(base + path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json(),
     };
-    await shot.setup?.(api);
+    await shot.setup?.(api, server);
 
-    const context = await browser.newContext({
+    if (shot.soundBlocked) tapFirstBrowser ??= await chromium.launch({ executablePath });
+    const context = await (shot.soundBlocked ? tapFirstBrowser! : browser).newContext({
       viewport: shot.viewport,
       deviceScaleFactor: shot.scale ?? 1,
       isMobile: shot.mobile ?? false,
@@ -365,7 +429,7 @@ try {
     });
     const page = await context.newPage();
     page.on('pageerror', err => console.error(`[${shot.name}] page error:`, err.message));
-    await page.goto(`${base}/?now=${NOW}#${shot.hash}`);
+    await page.goto(`${shot.outside ? `http://127.0.0.1:${PUBLIC_PORT}` : base}/?now=${NOW}#${shot.hash}`);
     await page.locator('.wall, .editor, .demo, .remote, .login').first().waitFor();
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(700);
@@ -380,4 +444,5 @@ try {
   }
 } finally {
   await browser.close();
+  await tapFirstBrowser?.close();
 }

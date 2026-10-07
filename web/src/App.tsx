@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
+import { Volume2 } from 'lucide-react';
+import { SAMPLE_PAIR_CODE } from '../../shared/sample.ts';
 import type { Board } from '../../shared/types.ts';
 import { EditorApp } from './editor/EditorApp.tsx';
 import { Login } from './editor/Login.tsx';
+import { PairScreen } from './editor/PairScreen.tsx';
 import { RemoteScreen } from './editor/RemoteScreen.tsx';
 import { useNow } from './lib/now.ts';
 import { navigate, parseRoute, useHashToken, type Route } from './lib/route.ts';
@@ -9,10 +12,16 @@ import { DemoSplit } from './proto/DemoSplit.tsx';
 import { ProtoBar } from './proto/ProtoBar.tsx';
 import { SHOW_PROTO_BAR } from './proto/protoState.ts';
 import { useBoard, useSync } from './store/board.ts';
+import { useSession } from './store/session.ts';
 import type { SyncStatus } from './store/sync.ts';
-import { CAN_EXIT_TO_DESKTOP, ExitToDesktop } from './wall/ExitToDesktop.tsx';
+import { useSoundBlocked } from './wall/chime.ts';
+import { CAN_EXIT_TO_DESKTOP, EditTheBoard, ExitToDesktop } from './wall/ExitToDesktop.tsx';
+import { wallMode } from './wall/night.ts';
 import { Wall } from './wall/Wall.tsx';
-import { useBurnInDrift, useLongOffline, useMouseInUse, useWakeLock } from './wall/standalone.ts';
+import { useBurnInDrift, useCheckIn, useLongOffline, useMouseInUse, useWakeLock, useWallCode } from './wall/standalone.ts';
+
+/** "Tap" on touch screens, "Click" with a mouse. */
+const TAP = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches ? 'Tap' : 'Click';
 
 function defaultRoute(): Route {
   // The preview page opens the side-by-side demo on wide screens; the real app opens
@@ -21,20 +30,37 @@ function defaultRoute(): Route {
 }
 
 /**
- * The wall screen itself (#wall): full screen, awake, drifting a little, and honest about
- * the connection. The mouse pointer shows while the mouse is in use, with a way out to the desktop.
+ * The wall itself (#wall), on the wall computer or any wall screen: full screen, awake,
+ * drifting a little, and honest about the connection. The pointer shows while the mouse
+ * is in use (or after a tap), with a way out: to the desktop on the wall computer, to
+ * editing the board everywhere else.
  */
 function WallScreen({ board, now, connectUrl, status }: { board: Board; now: Date; connectUrl: string | null; status: SyncStatus }) {
   useWakeLock();
   const [x, y] = useBurnInDrift();
   const offline = useLongOffline(status);
   const mouse = useMouseInUse();
-  const [onExit, setOnExit] = useState(false);
-  const pointer = mouse || onExit;
+  const [onButton, setOnButton] = useState(false);
+  const pointer = mouse || onButton;
+  const session = useSession();
+  // The wall computer and wall screens show sign-in codes (never over the internet), and check in.
+  const isWall = !!session && (session.wallComputer || session.wallScreen);
+  const code = useWallCode(isWall && !session.outside && board.settings.wall.showConnect);
+  useCheckIn(isWall);
+  const soundBlocked = useSoundBlocked(board.settings.wall.chime && wallMode(board.settings, now) === 'day');
   return (
     <div className={`wall-standalone${pointer ? ' is-pointer' : ''}`} style={{ transform: `translate(${x}px, ${y}px)` }}>
-      <Wall board={board} now={now} connectUrl={connectUrl} sound offline={offline} />
-      {CAN_EXIT_TO_DESKTOP && <ExitToDesktop shown={pointer} onHover={setOnExit} />}
+      <Wall board={board} now={now} connectUrl={connectUrl} pairCode={__DEMO_BUILD__ ? SAMPLE_PAIR_CODE : code} sound offline={offline} />
+      {CAN_EXIT_TO_DESKTOP && session?.wallComputer ? (
+        <ExitToDesktop shown={pointer} onHover={setOnButton} />
+      ) : (
+        <EditTheBoard shown={pointer} onHover={setOnButton} />
+      )}
+      {soundBlocked && (
+        <p className="wall-sound-hint">
+          <Volume2 aria-hidden="true" /> {TAP} anywhere to turn on sounds
+        </p>
+      )}
     </div>
   );
 }
@@ -70,7 +96,9 @@ export function App() {
 
   const current = route.view === 'editor' ? 'board' : route.view;
   let screen;
-  if (sync.status === 'locked') {
+  if (route.view === 'pair') {
+    screen = <PairScreen code={route.code} />;
+  } else if (sync.status === 'locked') {
     screen = <Login wall={route.view === 'wall' || route.view === 'demo'} />;
   } else if (sync.status === 'loading') {
     screen = <Loading wall={route.view === 'wall'} />;

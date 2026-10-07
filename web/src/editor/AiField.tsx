@@ -6,7 +6,7 @@ import { AI_SCHEDULES, type AiSchedule, type AiTask, type Note } from '../../../
 import { hostOf } from './NoteEditor.tsx';
 
 // Handing a sticky to the AI helper. For now this is the settings and the reports;
-// the helper itself (Claude Code on the wall computer) arrives in the next update.
+// connecting an AI to do the work (over MCP) arrives in the next update.
 
 /** Becomes a real check of the wall computer once the AI helper is set up there. */
 const ENGINE_READY = false;
@@ -43,7 +43,7 @@ export function AiField({ note, notes, now, mode, onChange, onOpen, onRunNow }: 
   let status: string;
   if (!ai) status = '';
   else if (note.aiState?.status === 'running') status = 'Checking now…';
-  else if (note.aiState?.status === 'needs-setup') status = 'The AI helper isn’t set up on the wall computer yet.';
+  else if (note.aiState?.status === 'needs-setup') status = 'No AI is connected to the board yet.';
   else if (note.aiState?.status === 'error') status = `The last check didn’t work${note.aiState.message ? `: ${note.aiState.message}` : '.'}`;
   else if (mode === 'new') status = 'It starts once the sticky is on the board.';
   else if (!ENGINE_READY && !__DEMO_BUILD__) status = 'Saved. The AI helper starts working in the next update.';

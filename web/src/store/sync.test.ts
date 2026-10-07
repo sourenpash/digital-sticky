@@ -260,6 +260,29 @@ describe('SyncEngine', () => {
     expect(e.getState().status).not.toBe('locked');
   });
 
+  it('isn’t locked again by a board request from before signing in that answers after it', async () => {
+    // Scanning the wall's code signs in right as the app opens, while its first
+    // request for the board (sent before signing in) may still be on its way.
+    server.locked = true;
+    let answer = () => {};
+    const load = server.load.bind(server);
+    server.load = async () => {
+      if (server.loads > 0) return load();
+      server.loads += 1;
+      await new Promise<void>(resolve => (answer = resolve));
+      throw new HttpError(401, 'Enter the PIN to open the board');
+    };
+    const e = new SyncEngine({ transport: server, onError: message => errors.push(message) });
+    const opening = e.refresh();
+    server.locked = false;
+    e.unlock();
+    answer();
+    await opening;
+    await vi.runAllTimersAsync();
+    expect(e.getState().status).not.toBe('locked');
+    expect(e.getBoard()?.notes.map(n => n.id)).toEqual(['a', 'b']);
+  });
+
   it('notices a sign-in from another tab when the board is fetched again', async () => {
     const e = engine();
     server.locked = true;

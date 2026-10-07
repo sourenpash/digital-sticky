@@ -1,4 +1,5 @@
 import type { ChangeEvent, ConnectEvent, HelloEvent } from '../../../shared/api.ts';
+import { emitServerEvent } from './serverEvents.ts';
 import type { SyncEngine } from './sync.ts';
 
 /** No message (not even the 20-second ping) for this long means the connection died quietly. */
@@ -56,6 +57,12 @@ export function startLiveUpdates(engine: SyncEngine, { onReloadRequest, onTicker
       heard();
       engine.setConnectUrl((JSON.parse((event as MessageEvent<string>).data) as ConnectEvent).connectUrl);
     });
+    for (const name of ['pair', 'screens'] as const) {
+      es.addEventListener(name, () => {
+        heard();
+        emitServerEvent(name);
+      });
+    }
     es.onerror = () => {
       engine.setStreamUp(false);
       // The browser retries by itself, unless the server answered with an error (a

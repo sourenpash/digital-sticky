@@ -43,6 +43,45 @@ export interface ConnectEvent {
   connectUrl: string | null;
 }
 
+/** GET api/session: whether this device has to sign in, and how it got in. */
+export interface SessionResponse {
+  pinSet: boolean;
+  signedIn: boolean;
+  /** The wall computer itself (localhost), which never signs in. */
+  wallComputer: boolean;
+  /** A device set up as a wall screen. */
+  wallScreen: boolean;
+  /** This request came from the internet (through Tailscale), not the home Wi-Fi. */
+  outside: boolean;
+}
+
+/** A device set up as a wall screen (GET api/screens). */
+export interface ScreenInfo {
+  id: string;
+  name: string;
+  addedAt: string;
+  lastSeenAt: string | null;
+  /** Checked in within the last few minutes. */
+  showing: boolean;
+  /** The device asking. */
+  thisDevice: boolean;
+  wallComputer: boolean;
+}
+
+/** A sign-in code (shared/pairing.ts): it works once, until `expiresAt` (ms since 1970). */
+export interface PairCode {
+  code: string;
+  expiresAt: number;
+}
+
+/** GET api/pair-code: the code the wall shows, or none when no device needs one (no PIN, and only used at home). */
+export type WallCode = PairCode | { code: null };
+
+/** GET api/anywhere: the board's internet address, when it can be used from anywhere. */
+export interface AnywhereStatus {
+  url: string | null;
+}
+
 export interface ApiRequest {
   method: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   path: string;

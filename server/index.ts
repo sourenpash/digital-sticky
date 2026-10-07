@@ -36,6 +36,8 @@ const kioskScript = resolve('scripts/linux/kiosk.sh');
 
 // For the message below; screens get it fresh each time (at boot the network may not have an address yet).
 const connectUrl = connectUrlFor(config);
+// The board can be used from anywhere when it has an https address leading to its internet door.
+const anywhereUrl = config.publicPort !== null && config.publicUrl?.startsWith('https://') ? config.publicUrl : null;
 let running;
 try {
   running = await startServer({
@@ -50,15 +52,20 @@ try {
     log: message => console.log(message),
     pin: config.pin,
     trustLocalhost: config.trustLocalhost,
+    publicPort: config.publicPort,
+    anywhereUrl,
+    outsideHttps: !config.publicUrl?.startsWith('http://'),
     allowedHosts: config.allowedHosts,
     remoteDebugPort: config.kioskDebugPort,
     kioskScript: process.platform === 'linux' && existsSync(kioskScript) ? kioskScript : null,
   });
 } catch (error) {
-  const code = (error as NodeJS.ErrnoException).code;
+  const { code, port } = error as NodeJS.ErrnoException & { port?: number };
   console.error(
     code === 'EADDRINUSE'
-      ? `Port ${config.port} is already in use. Is the board already running? (Or set PORT to another number.)`
+      ? port === config.publicPort
+        ? `Port ${port} (for using the board from anywhere) is already in use. Set PUBLIC_PORT to another number, or to "off".`
+        : `Port ${config.port} is already in use. Is the board already running? (Or set PORT to another number.)`
       : `Could not start the server: ${String(error)}`,
   );
   process.exit(1);
@@ -70,12 +77,14 @@ console.log(`  Board saved in:   ${resolve(config.dataDir)}`);
 if (!hasApp) console.log('  The web app is not built yet: run `npm run build` first.');
 console.log(`  Wall screen:      ${local}/#wall`);
 console.log(`  On this computer: ${local}`);
-if (connectUrl) console.log(`  On your phone:    ${connectUrl}  (same Wi-Fi)`);
+if (anywhereUrl) console.log(`  From anywhere:    ${anywhereUrl}  (devices sign in by scanning the code on the wall)`);
+else if (connectUrl) console.log(`  On your phone:    ${connectUrl}  (same Wi-Fi)`);
 console.log(
   config.pin
     ? `  PIN:              on${config.trustLocalhost ? ' (this computer opens the wall without it)' : ''}`
-    : '  PIN:              off. Anyone on your Wi-Fi can open the board; run `npm run pin` to set one.',
+    : `  PIN:              off. Anyone on your Wi-Fi can open the board${anywhereUrl ? ' (from the internet, devices still sign in)' : ''}; run \`npm run pin\` to set one.`,
 );
+if (!anywhereUrl && process.platform === 'linux') console.log('  From anywhere:    off. Run scripts/linux/anywhere.sh to turn it on.');
 console.log('');
 
 const server = running;

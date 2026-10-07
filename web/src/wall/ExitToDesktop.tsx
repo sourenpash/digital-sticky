@@ -1,5 +1,6 @@
-import { Minimize2 } from 'lucide-react';
+import { Minimize2, PencilLine } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { navigate } from '../lib/route.ts';
 
 /** Only the wall computer's own browser (at localhost) can close the wall screen; the server checks too. */
 export const CAN_EXIT_TO_DESKTOP = !__DEMO_BUILD__ && ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
@@ -50,6 +51,25 @@ export function ExitToDesktop({ shown, onHover }: ExitToDesktopProps) {
     >
       <Minimize2 aria-hidden="true" />
       <span>{state === 'failed' ? 'Couldn’t close it: press Alt+Tab' : state === 'closing' ? 'Closing…' : 'Exit to desktop'}</span>
+    </button>
+  );
+}
+
+/**
+ * "Edit the board", in a corner of the wall on a wall screen (an iPad, a laptop) once it's
+ * tapped or the mouse moves. It opens the board for editing on this device.
+ */
+export function EditTheBoard({ shown, onHover }: ExitToDesktopProps) {
+  return (
+    <button
+      type="button"
+      className={`wall-exit${shown ? ' is-shown' : ''}`}
+      onClick={() => navigate('board')}
+      onPointerEnter={() => onHover(true)}
+      onPointerLeave={() => onHover(false)}
+    >
+      <PencilLine aria-hidden="true" />
+      <span>Edit the board</span>
     </button>
   );
 }

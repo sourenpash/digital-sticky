@@ -8,6 +8,7 @@ import { Auth, loadSecret } from './auth.ts';
 import { EventHub } from './events.ts';
 import { startReminders } from './reminders.ts';
 import { KioskRemote } from './remote.ts';
+import { Screens } from './screens.ts';
 import { TickerFeed, type Fetcher } from './ticker.ts';
 import { BoardStore } from './store.ts';
 
@@ -27,8 +28,17 @@ export interface StartOptions {
   now?: () => Date;
   /** How often reminders are checked. */
   reminderTickMs?: number;
-  /** A PIN (6–12 digits) to lock the board with; null or missing leaves it open. */
+  /** A PIN (6–12 digits) to lock the board with; null or missing leaves it open at home. */
   pin?: string | null;
+  /**
+   * The door for the internet: a port on 127.0.0.1 that Tailscale Funnel forwards to.
+   * Everything arriving there needs signing in. 0 picks any free port (tests); none turns it off.
+   */
+  publicPort?: number | null;
+  /** The board's internet address, when it can be used from anywhere (shown in the Wall tab). */
+  anywhereUrl?: string | null;
+  /** Requests from the internet arrive over https (default true), so their cookies can be Secure. */
+  outsideHttps?: boolean;
   /** Let the wall computer's own browser in without the PIN, and tell it apart from phones (default true). */
   trustLocalhost?: boolean;
   allowedHosts?: string[];
@@ -50,6 +60,8 @@ function kioskCloser(script: string): () => Promise<void> {
 
 export interface RunningServer {
   port: number;
+  /** The internet door's port, or null when it's off. */
+  publicPort: number | null;
   store: BoardStore;
   hub: EventHub;
   /** Saves and stops. */
@@ -58,14 +70,29 @@ export interface RunningServer {
   stopNow(): void;
 }
 
+type Fetch = (request: Request, env: { incoming: unknown; outgoing: unknown }) => Response | Promise<Response>;
+
+/** Starts listening; rejects if the port can't be used. */
+function listen(fetch: Fetch, port: number, hostname: string): Promise<Server> {
+  return new Promise<Server>((resolve, reject) => {
+    const created: ServerType = serve({ fetch: fetch as Parameters<typeof serve>[0]['fetch'], port, hostname }, () => resolve(created as Server));
+    created.once('error', reject);
+  });
+}
+
 /** Opens the board and starts serving the app, the API and live updates. */
 export async function startServer(options: StartOptions): Promise<RunningServer> {
   const store = await BoardStore.open({ dir: options.dataDir, seed: options.seed, reset: options.reset, now: options.now, log: options.log });
   const hub = new EventHub();
   store.subscribe(rev => hub.broadcast('change', { epoch: store.epoch, rev }));
-  const auth = options.pin
-    ? new Auth({ pin: options.pin, secret: await loadSecret(options.dataDir), trustLocalhost: options.trustLocalhost ?? true, now: options.now })
-    : null;
+  const auth = new Auth({
+    pin: options.pin ?? null,
+    secret: await loadSecret(options.dataDir),
+    trustLocalhost: options.trustLocalhost ?? true,
+    outsideHttps: options.outsideHttps,
+    now: options.now,
+  });
+  const screens = new Screens(store, hub);
   const ticker = options.tickerFetch === false ? null : new TickerFeed(store, { fetcher: options.tickerFetch, log: options.log });
   ticker?.subscribe(() => hub.broadcast('ticker', {}));
   // The port is only known once listening (tests ask for any free one).
@@ -81,18 +108,29 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     connectUrl: options.connectUrl,
     auth,
     trustLocalhost: options.trustLocalhost ?? true,
+    anywhereUrl: options.anywhereUrl ?? null,
+    screens,
     allowedHosts: options.allowedHosts,
     ticker,
     remote,
     closeWall: options.kioskScript ? kioskCloser(options.kioskScript) : null,
   });
 
-  const server = await new Promise<Server>((resolve, reject) => {
-    const created: ServerType = serve({ fetch: app.fetch, port: options.port, hostname: options.host ?? '0.0.0.0' }, () => resolve(created as Server));
-    created.once('error', reject);
-  });
+  const server = await listen(app.fetch, options.port, options.host ?? '0.0.0.0');
   port = (server.address() as AddressInfo).port;
+  // The door for the internet. Only this computer can connect to it (Tailscale does, for
+  // Funnel), and the app treats everything that arrives there as coming from outside.
+  let outside: Server | null = null;
+  if (options.publicPort != null) {
+    try {
+      outside = await listen((request, env) => app.fetch(request, { ...env, outside: true }), options.publicPort, '127.0.0.1');
+    } catch (error) {
+      server.close();
+      throw error;
+    }
+  }
   const stopReminders = startReminders(store, { tickMs: options.reminderTickMs, log: options.log });
+  const stopScreens = screens.start();
   ticker?.start();
   remote?.start();
   // Tell open screens when the phone address changes (it's often unknown for a moment at boot).
@@ -111,16 +149,20 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
 
   const closeServer = () => {
     stopReminders();
+    stopScreens();
     ticker?.stop();
     remote?.close();
     if (addressWatch) clearInterval(addressWatch);
     hub.closeAll();
-    server.close();
-    server.closeAllConnections();
+    for (const open of [server, outside]) {
+      open?.close();
+      open?.closeAllConnections();
+    }
   };
 
   return {
     port,
+    publicPort: outside ? (outside.address() as AddressInfo).port : null,
     store,
     hub,
     async stop() {

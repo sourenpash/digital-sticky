@@ -271,6 +271,15 @@ export const trashSchema = z.object({
   goals: z.array(z.object({ goal: goalSchema, deletedAt: dateTime })),
 });
 
+/** Most devices that can be set up as wall screens. */
+export const MAX_SCREENS = 50;
+
+/** A device set up as a wall screen (kept by the server, not part of the board). */
+export const screenSchema = z.object({ id, name: z.string().min(1).max(60), addedAt: dateTime, lastSeenAt: dateTime.optional() });
+
+/** POST /api/screens, PATCH /api/screens/:id */
+export const screenNameSchema = z.object({ name: z.string().trim().min(1, 'Give the screen a name').max(60) });
+
 /** The saved file, data/board.json. */
 export const savedFileSchema = z.object({
   version: z.literal(1),
@@ -278,10 +287,12 @@ export const savedFileSchema = z.object({
   savedAt: dateTime,
   board: boardSchema,
   trash: trashSchema.default({ notes: [], lanes: [], goals: [] }),
+  screens: z.array(screenSchema).max(MAX_SCREENS).default([]),
 });
 
 export type Trash = z.infer<typeof trashSchema>;
 export type SavedFile = z.infer<typeof savedFileSchema>;
+export type ScreenEntry = z.infer<typeof screenSchema>;
 
 /** A short, readable message for an invalid request. */
 export function describeIssues(error: z.ZodError): string {

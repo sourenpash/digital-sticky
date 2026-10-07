@@ -27,6 +27,8 @@ interface WallProps {
   board: Board;
   now: Date;
   connectUrl: string | null;
+  /** The sign-in code to put in the "Connect your phone" QR code (the wall itself, not previews of it). */
+  pairCode?: string | null;
   /** Chime when a reminder goes off (the wall itself, not previews of it). */
   sound?: boolean;
   /** Show the phone remote's cursor (preview page). */
@@ -35,7 +37,7 @@ interface WallProps {
   offline?: boolean;
 }
 
-export function Wall({ board, now, connectUrl, sound = false, cursor = false, offline = false }: WallProps) {
+export function Wall({ board, now, connectUrl, pairCode = null, sound = false, cursor = false, offline = false }: WallProps) {
   const frameRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<Box | null>(null);
   const mode = wallMode(board.settings, now);
@@ -86,7 +88,7 @@ export function Wall({ board, now, connectUrl, sound = false, cursor = false, of
                 <WallColumns lanes={board.lanes} notes={board.notes} now={now} u={box.u} />
                 <aside className="wall-side">
                   <UpcomingList notes={board.notes} now={now} max={connect ? 5 : 10} />
-                  {connect && <ConnectCard url={connect} />}
+                  {connect && <ConnectCard url={connect} code={pairCode} />}
                 </aside>
               </div>
               <TwoWeeks notes={board.notes} lanes={board.lanes} now={now} />

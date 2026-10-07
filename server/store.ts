@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { format } from 'date-fns';
 import { lanesInOrder } from '../shared/board.ts';
 import { applyOp, type ServerOp } from '../shared/ops.ts';
-import { boardSchema, describeIssues, savedFileSchema, type SavedFile, type Trash } from '../shared/schema.ts';
+import { boardSchema, describeIssues, MAX_SCREENS, savedFileSchema, type SavedFile, type ScreenEntry, type Trash } from '../shared/schema.ts';
 import type { Board, Goal, Lane, Note } from '../shared/types.ts';
 
 // The board lives in memory and is written to <dir>/board.json shortly after each
@@ -14,6 +14,8 @@ import type { Board, Goal, Lane, Note } from '../shared/types.ts';
 // The first save of each day copies yesterday's file to backups/.
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** A wall screen's "last seen" time is saved at most this often (it checks in every minute). */
+const SEEN_SAVE_MS = 10 * 60_000;
 const BACKUP_NAME = /^board-\d{4}-\d{2}-\d{2}\.json$/;
 
 export class StoreError extends Error {
@@ -100,6 +102,7 @@ export class BoardStore {
       savedAt: now.toISOString(),
       board: options.seed(now),
       trash: emptyTrash(),
+      screens: [],
     };
     const store = new BoardStore(file, options);
     store.purgeTrash();
@@ -120,6 +123,47 @@ export class BoardStore {
 
   snapshot(): Snapshot {
     return { epoch: this.epoch, rev: this.file.rev, board: this.file.board };
+  }
+
+  /** The devices set up as wall screens. */
+  get screens(): ScreenEntry[] {
+    return this.file.screens;
+  }
+
+  /** Sets up a wall screen (or returns the one with this id). Not a board change: no new revision. */
+  addScreen(name: string, id: string = newId()): ScreenEntry {
+    const existing = this.file.screens.find(screen => screen.id === id);
+    if (existing) return existing;
+    if (this.file.screens.length >= MAX_SCREENS) throw new StoreError(409, `There can be at most ${MAX_SCREENS} wall screens`);
+    const screen: ScreenEntry = { id, name, addedAt: this.now().toISOString() };
+    this.file = { ...this.file, screens: [...this.file.screens, screen] };
+    this.scheduleSave();
+    return screen;
+  }
+
+  renameScreen(id: string, name: string): ScreenEntry {
+    const screen = this.file.screens.find(entry => entry.id === id);
+    if (!screen) throw new StoreError(404, 'That wall screen was removed');
+    const renamed = { ...screen, name };
+    this.file = { ...this.file, screens: this.file.screens.map(entry => (entry === screen ? renamed : entry)) };
+    this.scheduleSave();
+    return renamed;
+  }
+
+  removeScreen(id: string): void {
+    if (!this.file.screens.some(entry => entry.id === id)) return;
+    this.file = { ...this.file, screens: this.file.screens.filter(entry => entry.id !== id) };
+    this.scheduleSave();
+  }
+
+  /** Notes when a wall screen last showed the wall (saved now and then, not on every check-in). */
+  markScreenSeen(id: string, at: Date): void {
+    const screen = this.file.screens.find(entry => entry.id === id);
+    if (!screen) return;
+    if (screen.lastSeenAt && at.getTime() - Date.parse(screen.lastSeenAt) < SEEN_SAVE_MS) return;
+    const seen = { ...screen, lastSeenAt: at.toISOString() };
+    this.file = { ...this.file, screens: this.file.screens.map(entry => (entry === screen ? seen : entry)) };
+    this.scheduleSave();
   }
 
   /** Everything, including the trash, for a backup download. */

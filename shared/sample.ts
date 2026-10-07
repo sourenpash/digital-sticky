@@ -354,3 +354,9 @@ export function makeSampleBoard(now: Date): Board {
 
 /** Placeholder address for the "connect your phone" code on the preview page. */
 export const SAMPLE_CONNECT_URL = 'http://192.168.1.50:3000';
+
+/** The preview page's internet address (as Tailscale names them), for "From anywhere". */
+export const SAMPLE_ANYWHERE_URL = 'https://nuc.tail1234.ts.net';
+
+/** The sign-in code the preview page's wall shows. */
+export const SAMPLE_PAIR_CODE = 'K7QM2XPA';

@@ -42,6 +42,11 @@ export class Harness {
   private readonly withKiosk: boolean;
   /** The address the wall's "Connect your phone" code shows. */
   private readonly connectUrl: string | null;
+  /** Open the board's door for the internet too (as Tailscale Funnel would reach it). */
+  private readonly withOutside: boolean;
+  /** The internet door's port, and the address pages use to come in through it. */
+  publicPort: number | null = null;
+  outsideUrl = '';
   private kioskProcess: ChildProcess | null = null;
   private kioskHome = '';
   /** The kiosk browser's debugging port. */
@@ -52,7 +57,14 @@ export class Harness {
 
   constructor(
     seed: (now: Date) => Board,
-    { query = '', now, pin, kiosk = false, connectUrl = null }: { query?: string; now?: string; pin?: string; kiosk?: boolean; connectUrl?: string | null } = {},
+    {
+      query = '',
+      now,
+      pin,
+      kiosk = false,
+      connectUrl = null,
+      outside = false,
+    }: { query?: string; now?: string; pin?: string; kiosk?: boolean; connectUrl?: string | null; outside?: boolean } = {},
   ) {
     this.seed = seed;
     this.query = query;
@@ -60,6 +72,7 @@ export class Harness {
     this.pin = pin;
     this.withKiosk = kiosk;
     this.connectUrl = connectUrl;
+    this.withOutside = outside;
   }
 
   async launch(): Promise<void> {
@@ -77,6 +90,10 @@ export class Harness {
     this.pageErrors = [];
     this.offset = this.startAt ? Date.parse(this.startAt) - Date.now() : 0;
     if (this.withKiosk) this.kioskPort = await freePort();
+    if (this.withOutside) {
+      this.publicPort = await freePort();
+      this.outsideUrl = `http://127.0.0.1:${this.publicPort}`;
+    }
     await this.start();
     if (this.withKiosk) await this.startKiosk();
   }
@@ -134,13 +151,16 @@ export class Harness {
       dataDir: this.dataDir,
       seed: this.seed,
       staticDir,
-      connectUrl: this.connectUrl,
+      // From anywhere, the wall's code leads to the internet address.
+      connectUrl: this.withOutside ? this.outsideUrl : this.connectUrl,
       buildId,
       now: () => new Date(Date.now() + this.offset),
       reminderTickMs: 250,
       pin: this.pin,
       tickerFetch: fakeTickerFetch,
       remoteDebugPort: this.kioskPort,
+      // Pages reach the internet door over plain http here, so its cookies can't be Secure.
+      ...(this.withOutside ? { publicPort: this.publicPort, anywhereUrl: this.outsideUrl, outsideHttps: false } : {}),
     });
     this.port = this.server.port;
   }
@@ -153,16 +173,17 @@ export class Harness {
   /**
    * A new browser (its own cookies) showing `hash`. Every page talks to the server on
    * 127.0.0.1, so it counts as the wall computer; `headers` like X-Forwarded-For make
-   * it look like another device instead.
+   * it look like another device instead. `outside` comes in through the internet door.
    */
-  async open(device: Device, hash: string, { headers }: { headers?: Record<string, string> } = {}): Promise<Page> {
+  async open(device: Device, hash: string, { headers, outside = false }: { headers?: Record<string, string>; outside?: boolean } = {}): Promise<Page> {
     if (!this.browser) throw new Error('launch() first');
     const phone = device === 'phone';
     const context = await this.browser.newContext({ viewport: VIEWPORTS[device], isMobile: phone, hasTouch: phone, extraHTTPHeaders: headers });
     this.contexts.push(context);
     const page = await context.newPage();
     page.on('pageerror', error => this.pageErrors.push(`${device}: ${error.message}`));
-    await page.goto(`http://127.0.0.1:${this.port}/${this.query}#${hash}`);
+    const base = outside ? this.outsideUrl : `http://127.0.0.1:${this.port}`;
+    await page.goto(`${base}/${this.query}#${hash}`);
     return page;
   }
 

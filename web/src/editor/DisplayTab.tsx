@@ -12,7 +12,6 @@ import {
   Moon,
   MousePointer2,
   Plus,
-  QrCode,
   RotateCw,
   Sparkles,
   Trash2,
@@ -27,18 +26,10 @@ import { board as store, reloadWall, useSync } from '../store/board.ts';
 import { logout, useSession } from '../store/session.ts';
 import { showToast } from '../store/toasts.ts';
 import { Wall } from '../wall/Wall.tsx';
+import { ConnectSection, WallScreensSection } from './DevicesSections.tsx';
 import { normalizeUrl } from './NoteEditor.tsx';
+import { Switch } from './Switch.tsx';
 
-function Switch({ id, checked, label, onChange }: { id: string; checked: boolean; label: string; onChange: (value: boolean) => void }) {
-  return (
-    <div className="switch-row">
-      <label htmlFor={id}>{label}</label>
-      <button id={id} type="button" role="switch" aria-checked={checked} className="switch" onClick={() => onChange(!checked)}>
-        <span className="switch-knob" />
-      </button>
-    </div>
-  );
-}
 
 const NIGHT_MODES: Array<{ value: NightMode; label: string }> = [
   { value: 'auto', label: 'On a schedule' },
@@ -341,7 +332,7 @@ function AiSection({ board, now, go }: { board: Board; now: Date; go: (token: st
       <p className="set-note">
         {__DEMO_BUILD__
           ? 'In this preview the AI updates are samples.'
-          : 'Not set up yet. In the next update it runs on the wall computer with your Claude account (it uses your Max plan, like using Claude yourself), set up with one command.'}
+          : 'Not set up yet. In the next update, an AI of your choice connects to the board to do these: a Claude routine, Claude Code or OpenClaw, for example.'}
       </p>
     </section>
   );
@@ -353,37 +344,49 @@ function PinSection({ go }: { go: (token: string) => void }) {
   if (__DEMO_BUILD__) {
     body = (
       <>
-        <p className="set-note">A PIN is set. Each phone or computer asks for it once.</p>
+        <p className="set-note">A PIN is set. Each phone or computer signs in once, with the PIN or the code on the wall.</p>
         <button type="button" className="btn btn-sm btn-ghost" onClick={() => go('login')}>
-          See the PIN screen
+          See the sign-in screen
         </button>
       </>
     );
   } else if (!session) {
     body = <p className="set-note">Checking…</p>;
-  } else if (!session.pinSet) {
-    body = (
-      <p className="set-note">
-        No PIN is set, so anyone on your Wi-Fi who knows the address can open the board. To set one, run <code>npm run pin</code> on the wall computer and
-        restart the board.
-      </p>
-    );
-  } else if (session.wallComputer) {
-    body = <p className="set-note">The board is locked with a PIN. This is the wall computer, so it doesn’t need it.</p>;
   } else {
+    // Signed in with a cookie (not the wall computer or a wall screen, which are let in by themselves).
+    const withCookie = session.signedIn && !session.wallComputer && !session.wallScreen && (session.pinSet || session.outside);
+    const device = session.wallComputer
+      ? 'This is the wall computer, so it doesn’t need to sign in.'
+      : session.wallScreen
+        ? 'This device is a wall screen, so it stays signed in until it’s removed.'
+        : withCookie
+          ? 'This device is signed in. It stays signed in until you sign out or the PIN changes.'
+          : '';
     body = (
       <>
-        <p className="set-note">The board is locked with a PIN, and this device is signed in. It stays signed in until you sign out or the PIN changes.</p>
-        <button type="button" className="btn btn-sm" onClick={() => void logout()}>
-          Sign out this device
-        </button>
+        <p className="set-note">
+          {session.pinSet
+            ? 'The board is locked with a PIN. Devices sign in once, with the PIN or the code on the wall.'
+            : 'No PIN is set, so anyone on your Wi-Fi who knows the address can open the board. From the internet, devices always sign in with the code on the wall.'}{' '}
+          {device}
+        </p>
+        {!session.pinSet && (
+          <p className="set-note">
+            To set a PIN, run <code>npm run pin</code> on the wall computer and restart the board.
+          </p>
+        )}
+        {withCookie && (
+          <button type="button" className="btn btn-sm" onClick={() => void logout()}>
+            Sign out this device
+          </button>
+        )}
       </>
     );
   }
   return (
     <section className="set-group">
       <h3>
-        <Lock aria-hidden="true" /> PIN
+        <Lock aria-hidden="true" /> Signing in
       </h3>
       {body}
     </section>
@@ -407,25 +410,9 @@ export function DisplayTab({ board, now, desktop, go }: { board: Board; now: Dat
       </section>
 
       <div className="settings">
-        <section className="set-group">
-          <h3>
-            <QrCode aria-hidden="true" /> Connect a phone
-          </h3>
-          <Switch id="show-qr" checked={wall.showConnect} label="Show the “Connect your phone” code on the wall" onChange={showConnect => setWall({ showConnect })} />
-          <p className="set-note">
-            {connectUrl ? (
-              <>
-                Wall address: <strong>{connectUrl.replace(/^https?:\/\//, '')}</strong>
-              </>
-            ) : (
-              'The wall computer didn’t find its Wi-Fi address, so the code is hidden.'
-            )}
-          </p>
-          <p className="set-note">
-            <strong>Add it to your Home Screen:</strong> open the address in Safari, tap Share, then Add to Home Screen. It opens like an app. If the board has a PIN,
-            enter it once there too.
-          </p>
-        </section>
+        <ConnectSection connectUrl={connectUrl} showConnect={wall.showConnect} onShowConnect={showConnect => setWall({ showConnect })} now={now} />
+
+        <WallScreensSection now={now} go={go} />
 
         <section className="set-group">
           <h3>

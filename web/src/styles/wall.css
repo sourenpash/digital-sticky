@@ -103,6 +103,31 @@
   cursor: progress;
 }
 
+/* On a wall screen (an iPad, a laptop) the browser holds sound back until it's tapped. */
+.wall-sound-hint {
+  position: absolute;
+  bottom: clamp(10px, 1.6vw, 36px);
+  left: 50%;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  margin: 0;
+  padding: 0.55em 1em;
+  border-radius: 999px;
+  background: rgba(20, 18, 16, 0.82);
+  box-shadow: inset 0 0 0 1px #4a443c;
+  color: #d9d1c4;
+  font: 600 clamp(13px, 0.85vw, 20px) / 1 var(--font-ui);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.wall-sound-hint svg {
+  width: 1.15em;
+  height: 1.15em;
+}
+
 /* Shown after 10 s without the board server; everything else keeps its last state. */
 .wall-offline {
   position: absolute;
@@ -821,6 +846,19 @@
   font-size: calc(var(--u) * 1.15);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.wall-connect-text .wall-connect-code {
+  margin-top: calc(var(--u) * 0.35);
+  font-size: calc(var(--u) * 0.95);
+}
+
+.wall-connect-code strong {
+  font-size: calc(var(--u) * 1.15);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
 }
 
 /* Reminder banner */

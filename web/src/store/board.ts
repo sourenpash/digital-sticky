@@ -5,7 +5,7 @@ import { DEFAULT_SETTINGS } from '../../../shared/defaults.ts';
 import { afterFollowingUp } from '../../../shared/followups.ts';
 import type { GoalPatch, LanePatch, NotePatch, SettingsPatch } from '../../../shared/ops.ts';
 import { periodStart, repeatStatus } from '../../../shared/recurring.ts';
-import { makeSampleBoard, SAMPLE_CONNECT_URL } from '../../../shared/sample.ts';
+import { makeSampleBoard, SAMPLE_ANYWHERE_URL } from '../../../shared/sample.ts';
 import type { Board, Channel, ChecklistItem, Goal, Lane, LaneKind, Note, NoteColor, Settings, Stage } from '../../../shared/types.ts';
 import { currentTime } from '../lib/now.ts';
 import { uid } from '../lib/uid.ts';
@@ -17,7 +17,8 @@ import { showToast } from './toasts.ts';
 // here at once and are saved on the board server in the background (see sync.ts).
 // The single-file preview page has no server and keeps its sample board in memory.
 
-const local = __DEMO_BUILD__ ? new LocalTransport(makeSampleBoard(currentTime()), currentTime, SAMPLE_CONNECT_URL) : null;
+// The preview's board is set up to be used from anywhere, so its wall shows the internet address.
+const local = __DEMO_BUILD__ ? new LocalTransport(makeSampleBoard(currentTime()), currentTime, SAMPLE_ANYWHERE_URL) : null;
 
 export const engine = new SyncEngine({
   transport: local ?? new HttpTransport(),
