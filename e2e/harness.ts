@@ -15,12 +15,20 @@ import { fakeTickerFetch } from './tickerFixtures.ts';
 // too, started by the real kiosk script (scripts/linux/kiosk.sh, with Chromium
 // headless), and tests look into it through its debugging port like the server does.
 // The AIs the board wakes up are never reached: a stand-in records each wake-up and
-// answers like a Claude routine.
+// answers like a Claude routine. The same goes for notifications (phones' push
+// services) and texts (BlueBubbles): stand-ins record them, and nothing is sent.
 
 const CHROMIUM = process.env.PW_CHROMIUM ?? '/opt/pw-browsers/chromium';
 const staticDir = resolve('dist/web');
 
 export type Device = 'phone' | 'computer' | 'wall';
+
+/** A notification the board handed to a push service, or a text it handed to BlueBubbles (to stand-ins). */
+export interface Sent {
+  url: string;
+  headers: Record<string, string>;
+  body: Buffer;
+}
 
 /** A wake-up the board sent to an AI (to the stand-in). */
 export interface WakeUp {
@@ -42,6 +50,9 @@ export class Harness {
   pageErrors: string[] = [];
   /** Every wake-up sent to an AI, newest last. */
   wakeUps: WakeUp[] = [];
+  /** Every notification and text sent, newest last. */
+  pushes: Sent[] = [];
+  texts: Sent[] = [];
   private browser: Browser | null = null;
   private contexts: BrowserContext[] = [];
   private readonly seed: (now: Date) => Board;
@@ -100,6 +111,8 @@ export class Harness {
     this.port = 0;
     this.pageErrors = [];
     this.wakeUps = [];
+    this.pushes = [];
+    this.texts = [];
     this.offset = this.startAt ? Date.parse(this.startAt) - Date.now() : 0;
     if (this.withKiosk) this.kioskPort = await freePort();
     if (this.withOutside) {
@@ -173,6 +186,14 @@ export class Harness {
       aiFetch: async (url, init) => {
         this.wakeUps.push({ url, headers: init.headers as Record<string, string>, body: JSON.parse(String(init.body)) as Record<string, unknown> });
         return new Response(JSON.stringify({ type: 'routine_fire', claude_code_session_id: 'session_test', claude_code_session_url: 'https://claude.ai/code/session_test' }));
+      },
+      pushFetch: async (url, init) => {
+        this.pushes.push({ url, headers: init.headers as Record<string, string>, body: Buffer.from(init.body as Uint8Array) });
+        return new Response(null, { status: 201 });
+      },
+      textFetch: async (url, init) => {
+        this.texts.push({ url, headers: init.headers as Record<string, string>, body: Buffer.from(String(init.body)) });
+        return new Response(JSON.stringify({ status: 200, message: 'Message sent!' }));
       },
       remoteDebugPort: this.kioskPort,
       // Pages reach the internet door over plain http here, so its cookies can't be Secure.

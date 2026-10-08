@@ -146,6 +146,32 @@ const askAgain = async (api: Api) => {
   // The board asks the AI a moment after a change (and the wake-up just above was a minute ago).
   await new Promise(resolve => setTimeout(resolve, 2500));
 };
+/** Stand in for phones' push services and for BlueBubbles: nothing is sent anywhere. */
+const fakePushFetch = async () => new Response(null, { status: 201 });
+const fakeTextFetch = async () => new Response(JSON.stringify({ status: 200, message: 'Message sent!' }), { status: 200 });
+/** An iPhone that gets notifications (its keys are made up: nothing is ever sent to it). */
+const iphoneNotifications = async (api: Api) => {
+  const { createECDH } = await import('node:crypto');
+  const ecdh = createECDH('prime256v1');
+  ecdh.generateKeys();
+  await api.send('POST', '/api/push/devices', {
+    subscription: { endpoint: 'https://web.push.apple.com/QGuQyavXutnMH-sample', keys: { p256dh: ecdh.getPublicKey('base64url'), auth: 'c2FtcGxlc2FtcGxlMTIzNA' } },
+    name: 'iPhone',
+  });
+};
+/** Texts set up, and one texted back. */
+const textsSetUp = async (api: Api) => {
+  await api.send('PUT', '/api/imessage', {
+    url: 'http://mac-mini.local:1234',
+    password: 'sample-password',
+    addresses: ['+1 555 010 4477'],
+    reminders: true,
+    followUps: true,
+    morning: true,
+    morningTime: '08:00',
+  });
+  await api.send('POST', '/api/imessage/test', {});
+};
 const showAiHelper = async (page: Page) => {
   await page.locator('#ai-helper').evaluate(el => el.scrollIntoView({ block: 'start' }));
   await page.waitForTimeout(300);
@@ -376,6 +402,22 @@ const shots: Shot[] = [
   { name: 'phone-connect-home', hash: 'display', ...onPhone, away: true, act: showSetting('Connect a phone or computer') },
   { keep: true, name: 'phone-wall-screens', hash: 'display', ...onPhone, away: true, setup: wallScreens, act: showSetting('Wall screens') },
   { name: 'phone-wall-screens-dark', hash: 'display', ...onPhone, away: true, colorScheme: 'dark', setup: wallScreens, act: showSetting('Wall screens') },
+  { keep: true, name: 'phone-notifications', hash: 'display', ...onPhone, anywhere: true, away: true, setup: iphoneNotifications, act: showSetting('Notifications') },
+  { name: 'phone-notifications-dark', hash: 'display', ...onPhone, colorScheme: 'dark', anywhere: true, away: true, setup: iphoneNotifications, act: showSetting('Notifications') },
+  { keep: true, name: 'phone-texts', hash: 'display', ...onPhone, anywhere: true, away: true, setup: textsSetUp, act: showSetting('Texts (iMessage)') },
+  { name: 'phone-texts-empty', hash: 'display', ...onPhone, away: true, act: showSetting('Texts (iMessage)') },
+  {
+    name: 'phone-texts-options',
+    hash: 'display',
+    ...onPhone,
+    anywhere: true,
+    away: true,
+    setup: textsSetUp,
+    act: async page => {
+      await page.getByLabel('Phone number or Apple ID').evaluate(el => el.scrollIntoView({ block: 'start' }));
+      await page.waitForTimeout(300);
+    },
+  },
   { keep: true, name: 'phone-ai-helper', hash: 'display', ...onPhone, anywhere: true, away: true, setup: claudeRoutine, act: showAiHelper },
   {
     keep: true,
@@ -487,6 +529,8 @@ try {
       now: () => new Date(Date.now() + offset),
       tickerFetch: fakeTickerFetch,
       aiFetch: fakeAiFetch,
+      pushFetch: fakePushFetch,
+      textFetch: fakeTextFetch,
       pin: shot.pin ? '482915' : null,
       reminderTickMs: 500,
       remoteDebugPort: shot.kiosk ? KIOSK_DEBUG_PORT : null,

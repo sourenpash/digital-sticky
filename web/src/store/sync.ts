@@ -75,6 +75,7 @@ function merge(a: Op, b: Op): Op {
         wall: { ...a.patch.wall, ...b.patch.wall },
         ticker: { ...a.patch.ticker, ...b.patch.ticker },
         ai: { ...a.patch.ai, ...b.patch.ai },
+        notify: { ...a.patch.notify, ...b.patch.notify },
       },
     };
   }

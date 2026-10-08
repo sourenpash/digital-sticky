@@ -19,6 +19,7 @@ export interface SettingsPatch {
   wall?: Partial<Settings['wall']>;
   ticker?: Partial<Settings['ticker']>;
   ai?: Partial<Settings['ai']>;
+  notify?: Partial<Settings['notify']>;
 }
 
 export type Op =
@@ -224,6 +225,7 @@ export function applyOp(board: Board, op: ServerOp, now: Date): Board {
           wall: { ...board.settings.wall, ...definedOnly(op.patch.wall) },
           ticker: { ...board.settings.ticker, ...definedOnly(op.patch.ticker) },
           ai: { ...board.settings.ai, ...definedOnly(op.patch.ai) },
+          notify: { ...board.settings.notify, ...definedOnly(op.patch.notify) },
         },
       };
 

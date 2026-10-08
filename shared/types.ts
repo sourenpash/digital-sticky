@@ -212,11 +212,18 @@ export interface AiSettings {
   dailyCap: number;
 }
 
+/** Reminders on phones (notifications and texts). */
+export interface NotifySettings {
+  /** No notifications or texts while the wall is in night mode (the wall still shows them). */
+  quietAtNight: boolean;
+}
+
 export interface Settings {
   night: { mode: NightMode; start: string; end: string; style: NightStyle };
   wall: { showConnect: boolean; chime: boolean; alertMinutes: number };
   ticker: TickerSettings;
   ai: AiSettings;
+  notify: NotifySettings;
 }
 
 /** A reminder that has gone off and is showing on the wall. */

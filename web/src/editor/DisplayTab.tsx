@@ -25,6 +25,7 @@ import { showToast } from '../store/toasts.ts';
 import { Wall } from '../wall/Wall.tsx';
 import { AiHelperSection } from './AiSections.tsx';
 import { ConnectSection, WallScreensSection } from './DevicesSections.tsx';
+import { NotificationsSection, TextsSection } from './NotifySections.tsx';
 import { normalizeUrl } from './NoteEditor.tsx';
 import { Switch } from './Switch.tsx';
 
@@ -418,6 +419,10 @@ export function DisplayTab({ board, now, desktop, go }: { board: Board; now: Dat
             </button>
           )}
         </section>
+
+        <NotificationsSection board={board} now={now} />
+
+        <TextsSection now={now} />
 
         <AiHelperSection board={board} now={now} go={go} />
 

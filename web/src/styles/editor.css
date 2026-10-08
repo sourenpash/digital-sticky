@@ -3657,3 +3657,11 @@
   font-weight: 600;
   white-space: nowrap;
 }
+
+.is-warn-text {
+  color: var(--warn);
+}
+
+#texts input[type='time'] {
+  width: auto;
+}

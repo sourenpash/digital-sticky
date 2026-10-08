@@ -8,6 +8,9 @@ import { AiConnections } from './aiConnections.ts';
 import { createApp } from './app.ts';
 import { Auth, loadSecret } from './auth.ts';
 import { EventHub } from './events.ts';
+import { IMessage } from './imessage.ts';
+import { Notifier } from './notify.ts';
+import { PushService } from './push.ts';
 import { startReminders } from './reminders.ts';
 import { McpSecret } from './mcp.ts';
 import { KioskRemote } from './remote.ts';
@@ -57,6 +60,10 @@ export interface StartOptions {
   aiFetch?: AiFetch;
   /** How often the AI helper checks for due stickies. */
   aiTickMs?: number;
+  /** How notifications reach phones' push services (tests pass a stand-in). */
+  pushFetch?: AiFetch;
+  /** How texts reach BlueBubbles (tests pass a stand-in). */
+  textFetch?: AiFetch;
 }
 
 /** Closes the wall screen with its script (`kiosk.sh --stop`), so the desktop shows. */
@@ -119,6 +126,18 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     tickMs: options.aiTickMs,
     log: options.log,
   });
+  // Reminders on phones: notifications, and texts through iMessage.
+  const push = await PushService.open(options.dataDir, {
+    fetch: options.pushFetch,
+    // Who's sending, for the push services: the board's https address when it has one.
+    subject: () => options.anywhereUrl ?? 'mailto:digital-sticky@example.com',
+    log: options.log,
+  });
+  const imessage = await IMessage.open(options.dataDir, { fetch: options.textFetch, log: options.log });
+  const notifier = new Notifier({ store, push, imessage, log: options.log });
+  // Open Wall tabs show what was sent and received as it happens.
+  push.subscribe(() => hub.broadcast('push', {}));
+  imessage.subscribe(() => hub.broadcast('imessage', {}));
   const ticker = options.tickerFetch === false ? null : new TickerFeed(store, { fetcher: options.tickerFetch, log: options.log });
   ticker?.subscribe(() => hub.broadcast('ticker', {}));
   // The port is only known once listening (tests ask for any free one).
@@ -142,6 +161,8 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     closeWall: options.kioskScript ? kioskCloser(options.kioskScript) : null,
     ai: { secret: mcpSecret, connections: aiConnections, runner: aiRunner },
     homeUrl,
+    push,
+    imessage,
   });
 
   const server = await listen(app.fetch, options.port, options.host ?? '0.0.0.0');
@@ -157,7 +178,8 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
       throw error;
     }
   }
-  const stopReminders = startReminders(store, { tickMs: options.reminderTickMs, log: options.log });
+  const stopReminders = startReminders(store, { tickMs: options.reminderTickMs, log: options.log, onFire: fires => notifier.reminders(fires) });
+  const stopNotifier = notifier.start();
   const stopScreens = screens.start();
   const stopAi = aiRunner.start();
   ticker?.start();
@@ -178,6 +200,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
 
   const closeServer = () => {
     stopReminders();
+    stopNotifier();
     stopScreens();
     stopAi();
     ticker?.stop();
@@ -198,7 +221,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     async stop() {
       closeServer();
       await store.close();
-      await aiConnections.flush();
+      await Promise.all([aiConnections.flush(), push.flush(), imessage.flush()]);
     },
     stopNow() {
       store.flushSync();

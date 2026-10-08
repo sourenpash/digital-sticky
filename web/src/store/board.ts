@@ -302,10 +302,12 @@ export const board = {
     const wall = diff(before.wall, after.wall);
     const ticker = diff(before.ticker, after.ticker);
     const ai = diff(before.ai, after.ai);
+    const notify = diff(before.notify, after.notify);
     if (Object.keys(night).length) patch.night = night;
     if (Object.keys(wall).length) patch.wall = wall;
     if (Object.keys(ticker).length) patch.ticker = ticker;
     if (Object.keys(ai).length) patch.ai = ai;
+    if (Object.keys(notify).length) patch.notify = notify;
     if (Object.keys(patch).length) engine.dispatch({ type: 'settings.patch', patch });
   },
 

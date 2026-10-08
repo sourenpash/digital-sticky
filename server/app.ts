@@ -11,6 +11,7 @@ import type { AiOverview, AnywhereStatus, PairCode, ScreenInfo, SessionResponse,
 import {
   aiConnectionInputSchema,
   completionsChangeSchema,
+  imessageInputSchema,
   describeIssues,
   goalPatchSchema,
   laneOrderSchema,
@@ -31,6 +32,8 @@ import type { AiConnections } from './aiConnections.ts';
 import { Auth, fromThisComputer, isOutside, LoginLimiter } from './auth.ts';
 import type { EventHub } from './events.ts';
 import { hostAllowed } from './hosts.ts';
+import { imessageProblem, type IMessage } from './imessage.ts';
+import { pushSubscriptionSchema, type PushService } from './push.ts';
 import { RemoteError, type KioskRemote } from './remote.ts';
 import { createMcp, MCP_BODY_LIMIT, MCP_CLIENT_HEADER, type McpSecret } from './mcp.ts';
 import { LOCAL_SCREEN_ID, LOCAL_SCREEN_NAME, Screens } from './screens.ts';
@@ -66,6 +69,10 @@ export interface AppOptions {
   ai?: AiSetup | null;
   /** The board's address on the home Wi-Fi, for the MCP link there (defaults to connectUrl). */
   homeUrl?: string | null | (() => string | null);
+  /** Notifications on phones and computers; null turns them off. */
+  push?: PushService | null;
+  /** Reminders by iMessage, and texting the board back; null turns them off. */
+  imessage?: IMessage | null;
 }
 
 export interface AiSetup {
@@ -79,6 +86,10 @@ const OPEN_PATHS = new Set(['/api/health', '/api/session', '/api/login', '/api/l
 const loginSchema = z.object({ pin: z.string().max(64) });
 const pairSchema = z.object({ code: z.string().min(1).max(64) });
 const connectionId = /^[A-Za-z0-9_-]{1,64}$/;
+const pushDeviceSchema = z.object({ subscription: pushSubscriptionSchema, name: z.string().trim().min(1, 'Give the device a name').max(60) });
+/** The notification "Send a test" sends. */
+const TEST_NOTICE = { title: 'Notifications are on', body: 'Reminders from the wall show up like this.', url: '#board', tag: 'test' };
+const TEST_TEXT = 'Sticky Wall: texts work. Text help to see what you can text back.';
 const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /** Every change answers with the revision that includes it (and the server run it belongs to). */
@@ -118,6 +129,8 @@ export function createApp({
   closeWall = null,
   ai = null,
   homeUrl = connectUrl,
+  push = null,
+  imessage = null,
 }: AppOptions): Hono {
   const app = new Hono();
   const valueOf = (url: string | null | (() => string | null)) => (typeof url === 'function' ? url() : url);
@@ -382,6 +395,67 @@ export function createApp({
     return c.json(result);
   });
 
+  // Notifications on this phone or computer (Web Push).
+  const needPush = () => {
+    if (!push) throw new StoreError(404, 'Notifications are turned off on this board');
+    return push;
+  };
+  const pushOverview = (service: PushService) => ({ publicKey: service.publicKey, devices: service.devices() });
+
+  api.get('/push', c => {
+    c.header('Cache-Control', 'no-store');
+    return c.json(pushOverview(needPush()));
+  });
+
+  api.post('/push/devices', async c => {
+    const service = needPush();
+    const { subscription, name } = await readBody(c, pushDeviceSchema);
+    const device = await service.add(subscription, name, store.now());
+    return c.json({ device, ...pushOverview(service) }, 201);
+  });
+
+  api.delete('/push/devices/:id', async c => {
+    const service = needPush();
+    await service.remove(c.req.param('id'));
+    return c.json(pushOverview(service));
+  });
+
+  api.post('/push/devices/:id/test', async c => {
+    const service = needPush();
+    const id = c.req.param('id');
+    if (!service.devices().some(device => device.id === id)) throw new StoreError(404, 'That device no longer gets notifications');
+    const result = await service.send(TEST_NOTICE, store.now(), id);
+    return c.json(result);
+  });
+
+  // Texts through iMessage (BlueBubbles on a Mac).
+  const needTexts = () => {
+    if (!imessage) throw new StoreError(404, 'Texts are turned off on this board');
+    return imessage;
+  };
+  const textsInfo = (service: IMessage) => service.info({ anywhere: anywhereUrl, home: valueOf(homeUrl) });
+
+  api.get('/imessage', c => {
+    c.header('Cache-Control', 'no-store');
+    return c.json(textsInfo(needTexts()));
+  });
+
+  api.put('/imessage', async c => {
+    const service = needTexts();
+    const input = await readBody(c, imessageInputSchema);
+    const problem = imessageProblem(input, service.info({ anywhere: null, home: null }).passwordSet);
+    if (problem) throw new StoreError(400, problem);
+    await service.put(input);
+    return c.json(textsInfo(service));
+  });
+
+  // "Send a test text" (a real text, to everyone on the list).
+  api.post('/imessage/test', async c => {
+    const service = needTexts();
+    const result = await service.send(TEST_TEXT, store.now());
+    return c.json(result);
+  });
+
   api.get('/ticker', c => {
     c.header('Cache-Control', 'no-store');
     return c.json(ticker?.snapshot() ?? { items: [], updatedAt: null, stale: false });
@@ -569,6 +643,33 @@ export function createApp({
       return mcp.fetch(new Request(c.req.raw, { headers }));
     });
     app.all('/mcp/*', notFound);
+  }
+
+  // New messages from BlueBubbles. Its address holds a secret (BlueBubbles has no
+  // cookies); only people on the texts list are listened to.
+  if (imessage) {
+    const wrongSecrets = new LoginLimiter(20, 200, 60 * 60_000);
+    app.post('/hooks/imessage/:secret', bodyLimit({ maxSize: 256 * 1024, onError: c => c.json({ error: 'Too big' }, 413) }), async c => {
+      if (!imessage.matches(c.req.param('secret'))) {
+        const client = auth.clientKey(c);
+        const now = store.now().getTime();
+        const wait = wrongSecrets.waitFor(client, now);
+        if (wait > 0) {
+          c.header('Retry-After', String(wait));
+          return c.json({ error: 'Too many tries. Try again later.' }, 429);
+        }
+        wrongSecrets.tried(client, now);
+        return c.json({ error: 'Not found' }, 404);
+      }
+      let payload: unknown;
+      try {
+        payload = await c.req.json();
+      } catch {
+        return c.json({ error: 'Send JSON' }, 400);
+      }
+      const reply = await imessage.received(payload, store);
+      return c.json({ ok: true, replied: reply !== null });
+    });
   }
 
   if (staticDir) {

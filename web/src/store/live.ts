@@ -57,7 +57,7 @@ export function startLiveUpdates(engine: SyncEngine, { onReloadRequest, onTicker
       heard();
       engine.setConnectUrl((JSON.parse((event as MessageEvent<string>).data) as ConnectEvent).connectUrl);
     });
-    for (const name of ['pair', 'screens', 'ai'] as const) {
+    for (const name of ['pair', 'screens', 'ai', 'push', 'imessage'] as const) {
       es.addEventListener(name, () => {
         heard();
         emitServerEvent(name);

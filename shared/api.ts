@@ -121,6 +121,42 @@ export interface AiTestResult {
   url?: string;
 }
 
+/** A device that gets notifications (GET api/push). */
+export interface PushDeviceInfo {
+  id: string;
+  name: string;
+  addedAt: string;
+  lastSentAt: string | null;
+  /** Why the last one didn't go through, if it didn't. */
+  problem: string | null;
+  /** The end of its push address, so a device can tell it's the one. */
+  endpointEnd: string;
+}
+
+/** GET api/push: the key browsers subscribe with, and the devices that get notifications. */
+export interface PushOverview {
+  publicKey: string;
+  devices: PushDeviceInfo[];
+}
+
+/** Texts through iMessage (GET api/imessage). The BlueBubbles password never comes back. */
+export interface IMessageInfo {
+  /** BlueBubbles Server's address, like http://mac-mini.local:1234. */
+  url: string | null;
+  passwordSet: boolean;
+  /** Phone numbers and Apple IDs that get the texts, and may text the board. */
+  addresses: string[];
+  reminders: boolean;
+  followUps: boolean;
+  morning: boolean;
+  /** `HH:MM`, for the morning summary. */
+  morningTime: string;
+  /** The link BlueBubbles sends new messages to (it holds a secret): from anywhere, and on the home Wi-Fi. */
+  webhook: { anywhere: string | null; home: string | null; path: string };
+  lastSent: { at: string; ok: boolean; message: string } | null;
+  lastReceived: { at: string; from: string; text: string } | null;
+}
+
 export interface ApiRequest {
   method: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   path: string;

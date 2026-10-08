@@ -53,7 +53,7 @@ describe('the AI helper', () => {
     const phone = await h.open('phone', 'display');
     await addRoutine(phone);
     // The link shown is the one AIs connect to.
-    const shown = await phone.locator('.copy-box', { hasText: 'Link' }).locator('.copy-text').innerText();
+    const shown = await phone.locator('#ai-helper .copy-box', { hasText: 'Link' }).locator('.copy-text').innerText();
     expect(shown).toMatch(/\/mcp\/[A-Za-z0-9_-]{43}$/);
 
     // A to-do handed to the AI, then Run now.

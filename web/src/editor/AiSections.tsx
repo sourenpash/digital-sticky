@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { parseISO } from 'date-fns';
-import { Bot, Check, ChevronRight, Copy, ExternalLink, Pencil, Plus, Send, Sparkles, Trash2, TriangleAlert, Webhook, Workflow } from 'lucide-react';
+import { Bot, ChevronRight, ExternalLink, Pencil, Plus, Send, Sparkles, Trash2, TriangleAlert, Webhook, Workflow } from 'lucide-react';
 import { AI_AGENT_PROMPT, AI_KIND_LABEL, describeAiSchedule, whenLabel, type AiConnectionKind } from '../../../shared/ai.ts';
 import type { AiConnectionInfo, AiOverview, AiTestResult } from '../../../shared/api.ts';
 import type { Board } from '../../../shared/types.ts';
@@ -8,6 +8,7 @@ import { newMcpLink, removeConnection, saveConnection, testConnection, useAi } f
 import { board as store } from '../store/board.ts';
 import { showToast } from '../store/toasts.ts';
 import { uid } from '../lib/uid.ts';
+import { CopyBox } from './CopyBox.tsx';
 import { Switch } from './Switch.tsx';
 
 // The Wall tab's AI helper: letting an AI connect to the board (over MCP), the AIs the
@@ -26,64 +27,6 @@ const KIND_HINT: Record<AiConnectionKind, string> = {
   webhook: 'n8n, Zapier, Make, or your own script.',
   self: 'An AI that runs on its own schedule, like Claude Code. The board never wakes it.',
 };
-
-/** Copies text, with a fallback for browsers that don't allow the clipboard API (plain http). */
-async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    const area = document.createElement('textarea');
-    area.value = text;
-    area.setAttribute('readonly', '');
-    area.style.position = 'fixed';
-    area.style.opacity = '0';
-    document.body.append(area);
-    area.select();
-    let ok = false;
-    try {
-      ok = document.execCommand('copy');
-    } catch {
-      ok = false;
-    }
-    area.remove();
-    return ok;
-  }
-}
-
-function CopyButton({ text, label }: { text: string; label: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      type="button"
-      className="btn btn-sm"
-      aria-label={label}
-      onClick={async () => {
-        if (await copyText(text)) {
-          setCopied(true);
-          window.setTimeout(() => setCopied(false), 2000);
-        } else {
-          showToast({ text: 'Couldn’t copy. Select the text and copy it yourself.' });
-        }
-      }}
-    >
-      {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />} {copied ? 'Copied' : 'Copy'}
-    </button>
-  );
-}
-
-/** Text to copy (a link, a command), with its Copy button beside the label so the text gets the full width. */
-function CopyBox({ label, text, multiline = false }: { label: string; text: string; multiline?: boolean }) {
-  return (
-    <div className="copy-box">
-      <div className="copy-head">
-        <span className="field-label">{label}</span>
-        <CopyButton text={text} label={`Copy ${label.toLowerCase()}`} />
-      </div>
-      {multiline ? <pre className="copy-text is-block">{text}</pre> : <code className="copy-text">{text}</code>}
-    </div>
-  );
-}
 
 /**
  * The board's links for AIs: from anywhere, and on the Wi-Fi. When the wall computer

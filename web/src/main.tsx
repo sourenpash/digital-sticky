@@ -5,6 +5,7 @@ import { currentToken, navigate, startToken } from './lib/route.ts';
 import { applyPresetsFromUrl } from './proto/presets.ts';
 import { engine } from './store/board.ts';
 import { startLiveUpdates } from './store/live.ts';
+import { listenForNotificationTaps } from './store/push.ts';
 import { setWallScreenHint, wallScreenHint } from './store/screens.ts';
 import { currentSession, refreshSession } from './store/session.ts';
 import { refreshTicker } from './store/ticker.ts';
@@ -25,6 +26,7 @@ else {
     onTicker: () => void refreshTicker(),
   });
   openWallOnWallScreens();
+  listenForNotificationTaps(hash => navigate(hash));
 }
 
 /**

@@ -4,12 +4,11 @@ A sticky-note wall for a bedroom monitor. It shows colored squares for applicati
 
 ![The wall screen](docs/screenshots/wall-day.png)
 
-## Status: checkpoint 8, the AI helper
+## Status: checkpoints 8 and 9, the AI helper and reminders on your phone
 
-- **Any AI can do the stickies you hand it.** The board has its own [MCP](https://modelcontextprotocol.io) server, the common way AIs connect to tools. A Claude routine, Claude Code, Claude Desktop, OpenClaw or any other AI that speaks MCP connects with the board's link, reads the stickies handed to it, does them, and reports back on each sticky. What it finds can become new stickies. See [The AI helper](#the-ai-helper-optional).
-- **The board wakes the AI when something's due.** Wall → AI helper → **Add an AI**: a Claude routine, OpenClaw, or any webhook (n8n, Zapier, Make, your own script). Or an AI that checks in on its own schedule. Each kind has step-by-step setup with Copy buttons.
-- **On each sticky**, you can see what's happening: "Asked Claude routine 8 AM. Waiting for its report", with a link to the run, then the report.
-- **Not tried with a real AI yet.** Everything here was tested with stand-ins (a fake routine, an MCP client playing the AI), so the first real run is yours to start: set one up in the Wall tab, then tap **Send a test** or **Run now** on a sticky.
+- **Any AI can do the stickies you hand it** (checkpoint 8). The board has its own [MCP](https://modelcontextprotocol.io) server, the common way AIs connect to tools. A Claude routine, Claude Code, Claude Desktop, OpenClaw or any other AI that speaks MCP connects with the board's link, does the stickies handed to it, and reports back on each one. The board wakes the AI when something's due. See [The AI helper](#the-ai-helper-optional).
+- **Reminders on your phone** (checkpoint 9). Reminders and follow-up nudges show up as notifications on your iPhone (from the board on your Home Screen), and can come as iMessages through a Mac. Text the board back: **done**, **snooze 1h**, **add call NSF friday**, **today**. See [Reminders on your phone](#reminders-on-your-phone-optional).
+- **Not tried for real yet.** No AI was asked to do anything, and no notification or text was sent: stand-ins played Claude, the push services and BlueBubbles in every test. The first real run is yours to start, from the Wall tab.
 
 | Checkpoint | What it adds | Status |
 | --- | --- | --- |
@@ -21,7 +20,7 @@ A sticky-note wall for a bedroom monitor. It shows colored squares for applicati
 | 6 | Related tasks, follow-up reminders, emails and texts as to-dos, hiding the Connect code, and the AI helper's screens | Done |
 | 7 | Use it from anywhere (Tailscale Funnel), sign in by scanning the wall's code, and any device as a wall screen | Done |
 | 8 | The AI helper: any AI connects over MCP, and the board wakes it when something's due (Claude routines, OpenClaw, webhooks) | Ready for review |
-| 9 | Reminders by text: push notifications on your iPhone, and iMessage through a Mac | Next |
+| 9 | Reminders on your phone: notifications on your iPhone, and iMessage through a Mac, with texting the board back | Ready for review |
 
 ## Set up the wall computer
 
@@ -151,6 +150,39 @@ The wall's code then leads to the new address. It works at home too, so use it e
 - [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) with your own domain. No router change, but Cloudflare decrypts the traffic at its servers.
 - A port forward on your router to the NUC, with [Caddy](https://caddyserver.com) in front for automatic HTTPS. This needs a router change and an address of your own on the internet (it won't work behind carrier-grade NAT).
 
+### Reminders on your phone (optional)
+
+Reminders and nudges to follow up pop up on the wall at their time. They can reach you away from it too, with the same words, in two ways. Both stay quiet while the wall is in night mode (Wall → Notifications → **Quiet during night mode** turns that off).
+
+**Notifications on your iPhone** (no Mac needed). An iPhone gets notifications from websites added to its Home Screen (iOS 16.4 or newer), opened at an `https://` address, so set up [From anywhere](#from-anywhere-optional) first. Then, on the iPhone:
+
+1. open the board's `https://` address in Safari, tap Share, then **Add to Home Screen**;
+2. open the board from the Home Screen, go to Wall → **Notifications**, and tap **Turn on notifications on this phone**;
+3. allow notifications when the iPhone asks.
+
+A tap on a notification opens the sticky. Computers and Android phones can turn them on the same way, in the browser. The Wall tab lists every device that gets them, with **Send a test** and a button to stop them.
+
+**Texts through iMessage** (needs a Mac that stays on). The board sends iMessages through [BlueBubbles Server](https://bluebubbles.app), free software for a Mac signed in to Messages:
+
+1. on the Mac, sign in to Messages (a separate Apple ID for the board is best), and install and set up BlueBubbles Server. Its setup gives it a password;
+2. in the Wall tab under **Texts (iMessage)**, paste BlueBubbles' address (like `http://mac-mini.local:1234`) and password, and add the phone numbers or Apple IDs that get the texts. Only they can text the board;
+3. in BlueBubbles Server's API & Webhooks settings, add the webhook link the Wall tab shows, for New Messages, so the board hears texts back;
+4. choose what's texted: reminders, nudges to follow up, and a morning summary at a time you pick. **Send a test text** checks it.
+
+Text the board back:
+
+| Text | What it does |
+| --- | --- |
+| `done` | Finishes the sticky it just texted you about (a recurring task gets a "Did it"). `done NSF` finishes the sticky with NSF in its name |
+| `snooze 1h` | Reminds you again later: `10m`, `2 hours`, `tonight` (8 PM), `tomorrow` (9 AM), `friday` (9 AM) |
+| `add call NSF friday` | Adds a to-do. A day at the end (`today`, `tomorrow`, `friday`, `next friday`, `oct 14`, `10/14`) becomes its deadline |
+| `today` | Texts back what's due today, overdue, and today's reminders |
+| `help` | The list |
+
+Every change shows on the wall straight away, like one made in the app, and can be changed back there.
+
+**What's kept where.** The board's notification key and the devices that get notifications are in `data/push.json`, and the texts settings, with BlueBubbles' password, in `data/imessage.json`, both readable only by you and never in a downloaded backup. The password never goes back to the app. Notifications are encrypted for each device, so Apple's (or Google's) push service can't read them. BlueBubbles' link holds a secret, wrong guesses are slowed down, and messages from anyone not on the list, or in group chats, are ignored.
+
 ### The AI helper (optional)
 
 Hand any sticky to an AI with **Give this to AI** in the sticky: say what it should do ("Check grants.gov and nsf.gov for new early-career calls, with deadlines and links") and how often. The AI looks it up and reports back on the sticky, and can add stickies for new things it finds. Any AI that speaks MCP can do the work; you choose which in the Wall tab.
@@ -181,6 +213,8 @@ One AI is the default; a sticky can pick another under **Who does it**. **Send a
   - if Ubuntu's firewall is on (`sudo ufw status`), let the board through: `sudo ufw allow 3000/tcp`.
 - **The From anywhere address doesn't open:** run `scripts/linux/anywhere.sh --status`. The first time, Tailscale can take a few minutes to get the certificate. A phone signed in at the Wi-Fi address signs in once more at the internet address, because to the browser they're different places.
 - **A sticky says the AI didn't accept the token, or nothing was found at its address:** wake-ups to that AI stop until it's fixed. In the Wall tab, change it (for a Claude routine, make a new token in its API trigger), then **Send a test**.
+- **Notifications don't arrive on the iPhone:** they come only to the board opened from the Home Screen at its `https://` address (not in Safari, and not at the Wi-Fi address). Check the iPhone's Settings → Notifications for the board, and that night mode isn't on. **Send a test** in the Wall tab shows whether the push service took it.
+- **Texts don't arrive, or the board doesn't answer:** check the Mac is on and BlueBubbles Server is running, then **Send a test text**. For texts back, BlueBubbles needs the webhook link the Wall tab shows (with the board's internet address if the Mac isn't on your Wi-Fi), and your number has to be on the list.
 - **A sticky says no report came back:** open the run from the sticky to see what the AI did. A Claude routine needs the Sticky Wall connector, and the board needs From anywhere. Tap **Run now** to try again.
 - **The wall shows the wrong time:** set the NUC's time zone, for example `sudo timedatectl set-timezone America/New_York`.
 - **The remote says it can't find the wall's browser:** the wall screen has to be started by the kiosk script. Restart the NUC, or run `scripts/linux/kiosk.sh`.
@@ -251,6 +285,10 @@ Put any of these in a `.env` file next to `package.json` (or set them in the env
 | --- | --- | --- | --- |
 | ![Related tasks](docs/screenshots/phone-related.png) | ![Follow up?](docs/screenshots/phone-submitted-ask.png) | ![An email to follow up](docs/screenshots/phone-email-follow-up.png) | ![A follow-up reminder](docs/screenshots/phone-follow-up-nudge.png) |
 
+| Notifications | Texts through iMessage |
+| --- | --- |
+| ![Notifications](docs/screenshots/phone-notifications.png) | ![Texts](docs/screenshots/phone-texts.png) |
+
 | The AI helper's link | The AIs the board wakes up | Adding a Claude routine | Waiting for the report |
 | --- | --- | --- | --- |
 | ![The AI helper's link](docs/screenshots/phone-ai-helper.png) | ![AIs the board wakes up](docs/screenshots/phone-ai-connections.png) | ![Adding a Claude routine](docs/screenshots/phone-ai-add-routine.png) | ![Waiting for the report](docs/screenshots/phone-ai-waiting.png) |
@@ -291,7 +329,8 @@ Put any of these in a `.env` file next to `package.json` (or set them in the env
   - `remote.ts` drives the wall's browser for the phone remote through Chrome's DevTools protocol (`cdp.ts`), and reloads the wall's page if it crashes or fails to load;
   - `auth.ts` signs devices in (the PIN, and the codes the wall shows), and `server.ts` opens the second port for the internet, where everything counts as coming from outside;
   - `screens.ts` keeps track of the wall screens;
-  - `mcp.ts` is the board's MCP server for AIs, `aiReport.ts` checks what an AI reports against what the sticky allows, and `ai.ts` wakes AIs when a sticky is due (the AIs themselves are kept by `aiConnections.ts`).
+  - `mcp.ts` is the board's MCP server for AIs, `aiReport.ts` checks what an AI reports against what the sticky allows, and `ai.ts` wakes AIs when a sticky is due (the AIs themselves are kept by `aiConnections.ts`);
+  - `notify.ts` sends reminders to phones when they go off: `push.ts` as notifications, and `imessage.ts` as texts through BlueBubbles, which also carries out what's texted back (`textCommands.ts`). `web/public/sw.js` is the service worker that shows notifications.
 - `web/` is the React app for the wall, phones and computers.
   - `store/sync.ts` applies each change on screen at once, sends it to the server in order, and keeps waiting changes through a lost connection.
   - `store/live.ts` holds the live connection open and reconnects when an iPhone drops it.
@@ -308,7 +347,7 @@ The API, for scripts (AIs use the MCP server instead):
 | Request | What it does |
 | --- | --- |
 | `GET /api/state` | The whole board, with its revision number |
-| `GET /api/events` | Live updates (server-sent events): `hello`, `change`, `ticker`, `connect`, `pair`, `screens`, `ai`, `ping` |
+| `GET /api/events` | Live updates (server-sent events): `hello`, `change`, `ticker`, `connect`, `pair`, `screens`, `ai`, `push`, `imessage`, `ping` |
 | `GET /api/session`, `POST /api/login`, `POST /api/logout` | Whether this device has to sign in and how it got in, and signing in with the PIN (`{"pin": "…"}`) and out |
 | `POST /api/pair` | Sign in with a code from the wall: `{"code": "K7QM-2XPA"}` |
 | `GET /api/pair-code`, `POST /api/pair-code` | The code the wall shows (the wall computer and wall screens only, never from the internet), and a new code for **Connect another device** |
@@ -321,7 +360,7 @@ The API, for scripts (AIs use the MCP server instead):
 | `POST /api/notes/:id/completions` | Recurring tasks: `{"add": [time]}` or `{"remove": [time]}` |
 | `POST /api/lanes`, `PATCH`/`DELETE /api/lanes/:id`, `PUT /api/lanes/order` | Columns |
 | `POST /api/goals`, `PATCH`/`DELETE /api/goals/:id` | Goals |
-| `PATCH /api/settings` | Night mode, wall, ticker and AI helper settings (`{"ai": {"connect": true, "dailyCap": 12}}`) |
+| `PATCH /api/settings` | Night mode, wall, ticker, AI helper and phone settings (`{"ai": {"connect": true, "dailyCap": 12}}`, `{"notify": {"quietAtNight": true}}`) |
 | `POST /api/alerts`, `DELETE /api/alerts/:id` | Pop a note's reminder up on the wall now, and take it down |
 | `GET /api/remote` | What the wall's browser shows, and whether a text box there is selected |
 | `POST /api/remote` | Remote commands, in order: `{"commands": [{"type": "move", "dx": 40, "dy": 0}, {"type": "click"}, {"type": "text", "text": "hi"}]}`. Others are `scroll`, `key`, `back`, `reload`, `board`, `open` (`{"url": …}`) and `dialog` (`{"accept": true}`) |
@@ -329,6 +368,9 @@ The API, for scripts (AIs use the MCP server instead):
 | `PUT`/`DELETE /api/ai/connections/:id`, `POST /api/ai/connections/:id/test` | Add or change an AI the board wakes up (`{"kind": "routine", "name": "Claude routine", "url": "…", "token": "…"}`; leave `token` out to keep the saved one), remove it, and send it a test |
 | `POST /api/ai/mcp/rotate` | A new secret for the AIs' link (the old link stops working) |
 | `POST /mcp/<secret>` | The MCP server (Streamable HTTP), only while the AI connection is on. Tools: `list_ai_tasks`, `get_sticky`, `list_stickies` and `report_ai_run` |
+| `GET /api/push`, `POST /api/push/devices`, `DELETE /api/push/devices/:id`, `POST /api/push/devices/:id/test` | Notifications: the board's public key and the devices that get them, turning them on for a device (`{"subscription": …, "name": "iPhone"}`, the browser's push subscription), stopping them, and a test |
+| `GET`/`PUT /api/imessage`, `POST /api/imessage/test` | Texts: the settings (the password never comes back; leave it out to keep the saved one), and a test text |
+| `POST /hooks/imessage/<secret>` | Where BlueBubbles posts new messages |
 | `GET /api/export` | Download everything, trash included |
 
 Besides the usual fields, a note can have:
@@ -349,8 +391,8 @@ Changes must be sent as JSON (`Content-Type: application/json`). With a PIN, and
 | `npm run dev` | The board server plus a development server with live reload, at `http://localhost:5173` (add `-- --demo` for the sample board) |
 | `npm run pin` | Set the board's PIN in `.env` (`npm run pin -- --off` removes it) |
 | `npm run typecheck` | TypeScript checks for the app, the server and the tooling |
-| `npm test` | Unit tests: the data rules, follow-up timing, the store, the API, signing in from inside and outside, wall screens, live updates, syncing, the remote's input handling, `anywhere.sh` with a stand-in Tailscale, the MCP server with a client playing the AI, and the wake-ups against stand-ins (nothing is sent to a real AI) |
-| `npm run test:e2e` | Builds, then runs a real server with headless Chromium as a phone, a computer and the wall, plus the kiosk script driving the wall's browser for the remote, and an MCP client playing the AI (wake-ups go to a stand-in) |
+| `npm test` | Unit tests: the data rules, follow-up timing, the store, the API, signing in from inside and outside, wall screens, live updates, syncing, the remote's input handling, `anywhere.sh` with a stand-in Tailscale, the MCP server with a client playing the AI, the wake-ups, notifications and texts against stand-ins (nothing is sent to a real AI, phone or Mac), and the text commands |
+| `npm run test:e2e` | Builds, then runs a real server with headless Chromium as a phone, a computer and the wall, plus the kiosk script driving the wall's browser for the remote, an MCP client playing the AI, and stand-ins for the push services and BlueBubbles (a notification goes all the way to the page's service worker) |
 | `npm run build` | Production build into `dist/web` |
 | `npm run screenshots` | Renders `docs/screenshots` against a real server with the sample board (build first) |
 | `npm run build:preview-page` | A single self-contained HTML file that runs on sample data with no server |

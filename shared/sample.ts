@@ -349,6 +349,7 @@ export function makeSampleBoard(now: Date): Board {
       wall: { showConnect: false, chime: true, alertMinutes: 60 },
       ticker: structuredClone(DEFAULT_SETTINGS.ticker),
       ai: { connect: true, dailyCap: 12 },
+      notify: { quietAtNight: true },
     },
     alerts: [],
   };

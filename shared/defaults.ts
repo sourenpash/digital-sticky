@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ticker: { show: true, crypto: ['BTC', 'ETH'], stocks: ['AAPL', 'NVDA', 'MSFT', 'GOOGL'], news: ['hn', 'verge'] },
   // No AI can connect until it's switched on in the Wall tab.
   ai: { connect: false, dailyCap: 12 },
+  notify: { quietAtNight: true },
 };
 
 /** A fresh board: the default columns, nothing on them yet. */

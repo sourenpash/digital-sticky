@@ -54,14 +54,21 @@ export function reminderTick(board: Board, now: Date, makeId: () => string = new
 export interface ReminderOptions {
   tickMs?: number;
   log?: (message: string) => void;
+  /** Reminders that just popped up on the wall (to send to phones too). */
+  onFire?: (fires: ReminderFire[]) => Promise<void> | void;
 }
 
 /** Checks for reminders now (catching up after a restart) and every `tickMs`. Returns stop. */
-export function startReminders(store: BoardStore, { tickMs = 10_000, log = () => {} }: ReminderOptions = {}): () => void {
+export function startReminders(store: BoardStore, { tickMs = 10_000, log = () => {}, onFire }: ReminderOptions = {}): () => void {
   const tick = () => {
     try {
       const change = reminderTick(store.board, store.now());
-      if (change) store.apply(change);
+      if (!change) return;
+      store.apply(change);
+      const shown = change.fire.filter(fire => fire.show);
+      if (shown.length && onFire) {
+        void Promise.resolve(onFire(shown)).catch(error => log(`Could not send reminders to phones: ${error instanceof Error ? error.message : String(error)}`));
+      }
     } catch (error) {
       log(`Could not update reminders: ${error instanceof Error ? error.message : String(error)}`);
     }

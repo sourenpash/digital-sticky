@@ -225,6 +225,8 @@ const aiSettingsSchema = z.object({
   dailyCap: z.number().int().min(1).max(MAX_AI_DAILY_CAP),
 });
 
+const notifySettingsSchema = z.object({ quietAtNight: z.boolean() });
+
 export const settingsSchema = z.object({
   night: z.object({
     mode: z.enum(NIGHT_MODES),
@@ -240,6 +242,7 @@ export const settingsSchema = z.object({
   // Boards saved before the ticker (or the AI helper) existed get the default one.
   ticker: tickerSchema.default(() => structuredClone(DEFAULT_SETTINGS.ticker)),
   ai: aiSettingsSchema.default(() => structuredClone(DEFAULT_SETTINGS.ai)),
+  notify: notifySettingsSchema.default(() => structuredClone(DEFAULT_SETTINGS.notify)),
 });
 
 export const settingsPatchSchema = z.object({
@@ -247,6 +250,7 @@ export const settingsPatchSchema = z.object({
   wall: settingsSchema.shape.wall.partial().optional(),
   ticker: tickerSchema.partial().optional(),
   ai: aiSettingsSchema.partial().optional(),
+  notify: notifySettingsSchema.partial().optional(),
 });
 
 /** Most reminders that can be showing at once. */
@@ -302,6 +306,31 @@ export const aiConnectionInputSchema = z.object({
 });
 
 export type AiConnectionInput = z.output<typeof aiConnectionInputSchema>;
+
+/** Most phone numbers and Apple IDs that get texts from the board. */
+export const MAX_TEXT_ADDRESSES = 10;
+
+/** PUT api/imessage. A password left out keeps the saved one. */
+export const imessageInputSchema = z.object({
+  url: z.union([webAddress, z.literal('')]),
+  password: z.string().max(200).optional(),
+  addresses: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(3)
+        .max(100)
+        .regex(/^(\+?[\d\s().-]{6,}|[^\s@]+@[^\s@]+\.[^\s@]+)$/, 'Use a phone number (with its country code, like +1 555 123 4567) or an Apple ID email'),
+    )
+    .max(MAX_TEXT_ADDRESSES),
+  reminders: z.boolean(),
+  followUps: z.boolean(),
+  morning: z.boolean(),
+  morningTime: clock,
+});
+
+export type IMessageInput = z.output<typeof imessageInputSchema>;
 
 /** Most devices that can be set up as wall screens. */
 export const MAX_SCREENS = 50;
