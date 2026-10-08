@@ -4,15 +4,12 @@ A sticky-note wall for a bedroom monitor. It shows colored squares for applicati
 
 ![The wall screen](docs/screenshots/wall-day.png)
 
-## Status: checkpoint 7, use it from anywhere, and any device as the wall
+## Status: checkpoint 8, the AI helper
 
-- **From anywhere.** One command on the wall computer, `scripts/linux/anywhere.sh`, gives the board a fixed `https://` address on the internet (with Tailscale Funnel, free). Nothing changes on your router, and the wall computer still serves everything itself. See [From anywhere](#from-anywhere-optional).
-- **Sign in by scanning the wall.** The wall's "Connect your phone" code now signs a phone in too: point the camera at it and the board opens, signed in. Under the code is the same code as text, like `K7QM-2XPA`, to type in where you can't scan (a Home Screen app, say).
-  - From the internet, every device signs in once, PIN or not. At home, a board without a PIN stays open as before.
-  - Away from the wall, a phone that's signed in can connect another device: Wall → **Connect another device** shows a code for it.
-  - Codes work once, for 10 minutes, and the wall shows a new one every couple of minutes.
-- **Wall screens.** Any device can show the wall: an iPad, a TV's web browser, an old laptop, as many as you like. On the device, choose Wall → **Use this device as a wall screen**. From then on it opens straight to the wall, and a tap shows **Edit the board**. The Wall tab lists every wall screen and whether it's showing the wall now.
-- **The AI helper** is still screens only. Next, any AI that can use MCP (a Claude routine, Claude Code, OpenClaw and others) connects to the board to do the stickies you hand it, and reports back on them.
+- **Any AI can do the stickies you hand it.** The board has its own [MCP](https://modelcontextprotocol.io) server, the common way AIs connect to tools. A Claude routine, Claude Code, Claude Desktop, OpenClaw or any other AI that speaks MCP connects with the board's link, reads the stickies handed to it, does them, and reports back on each sticky. What it finds can become new stickies. See [The AI helper](#the-ai-helper-optional).
+- **The board wakes the AI when something's due.** Wall → AI helper → **Add an AI**: a Claude routine, OpenClaw, or any webhook (n8n, Zapier, Make, your own script). Or an AI that checks in on its own schedule. Each kind has step-by-step setup with Copy buttons.
+- **On each sticky**, you can see what's happening: "Asked Claude routine 8 AM. Waiting for its report", with a link to the run, then the report.
+- **Not tried with a real AI yet.** Everything here was tested with stand-ins (a fake routine, an MCP client playing the AI), so the first real run is yours to start: set one up in the Wall tab, then tap **Send a test** or **Run now** on a sticky.
 
 | Checkpoint | What it adds | Status |
 | --- | --- | --- |
@@ -22,9 +19,9 @@ A sticky-note wall for a bedroom monitor. It shows colored squares for applicati
 | 4 | Reminders on your phone, PIN protection, add to Home Screen, wall polish, live ticker prices and headlines | Done |
 | 5 | Remote control of the wall from your phone, and a one-command install on the Intel NUC | Done |
 | 6 | Related tasks, follow-up reminders, emails and texts as to-dos, hiding the Connect code, and the AI helper's screens | Done |
-| 7 | Use it from anywhere (Tailscale Funnel), sign in by scanning the wall's code, and any device as a wall screen | Ready for review |
-| 8 | The AI helper: any AI connects over MCP, and the board wakes it when something's due (Claude routines, OpenClaw, webhooks) | Next |
-| 9 | Reminders by text: push notifications on your iPhone, and iMessage through a Mac | Later |
+| 7 | Use it from anywhere (Tailscale Funnel), sign in by scanning the wall's code, and any device as a wall screen | Done |
+| 8 | The AI helper: any AI connects over MCP, and the board wakes it when something's due (Claude routines, OpenClaw, webhooks) | Ready for review |
+| 9 | Reminders by text: push notifications on your iPhone, and iMessage through a Mac | Next |
 
 ## Set up the wall computer
 
@@ -154,12 +151,37 @@ The wall's code then leads to the new address. It works at home too, so use it e
 - [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) with your own domain. No router change, but Cloudflare decrypts the traffic at its servers.
 - A port forward on your router to the NUC, with [Caddy](https://caddyserver.com) in front for automatic HTTPS. This needs a router change and an address of your own on the internet (it won't work behind carrier-grade NAT).
 
+### The AI helper (optional)
+
+Hand any sticky to an AI with **Give this to AI** in the sticky: say what it should do ("Check grants.gov and nsf.gov for new early-career calls, with deadlines and links") and how often. The AI looks it up and reports back on the sticky, and can add stickies for new things it finds. Any AI that speaks MCP can do the work; you choose which in the Wall tab.
+
+**Turn it on:** Wall → AI helper → **Let an AI connect to the board**. The Wall tab then shows the board's link for AIs. It holds a long secret, so keep it private: with it, an AI can read the board and report on the stickies handed to it. **Make a new link** stops the old one working.
+
+**Who does the work.** MCP only lets the AI start the conversation, so the board knocks first: when a sticky is due, it wakes the AI that does it. **Add an AI** walks you through each kind:
+
+| Kind | What you set up |
+| --- | --- |
+| **Claude routine** (runs in Claude's cloud, on your Claude plan) | Needs [From anywhere](#from-anywhere-optional), since Claude's cloud can't reach your Wi-Fi. In Claude, add a custom connector named Sticky Wall with the board's link. Make a routine with the prompt the Wall tab gives you, with that connector and Full network access (so it can read websites). Add an API trigger to it, and paste its address and token into the board. Each wake-up is one routine run |
+| **OpenClaw** | Add the board as an MCP server: `openclaw mcp add sticky-wall --url <the link> --transport streamable-http`. Turn on OpenClaw's webhooks (`hooks.enabled`, with a `hooks.token`), and paste its address (like `http://mac-mini.local:18789`) and that token into the board |
+| **Webhook** (n8n, Zapier, Make, your own script) | The board posts `{"event": "ai.tasks_due", "tasks": [...], "mcpUrl": "...", "prompt": "..."}` to your address. With a secret, each post carries `X-Sticky-Signature: sha256=<HMAC-SHA256 of the body>` |
+| **Checks in on its own** (Claude Code, or any AI with its own schedule) | Add the board to the AI, for Claude Code: `claude mcp add --transport http sticky-wall <the link>`. Run it on its own schedule (every hour, say) with the prompt the Wall tab gives you. The board never wakes it; it asks what's due |
+
+One AI is the default; a sticky can pick another under **Who does it**. **Send a test** wakes an AI once, to check it's set up (a Claude routine counts it as a run).
+
+**When it runs.** At the sticky's time (once, every day or every week), or now with **Run now**. The board wakes each AI at most once a minute, and at most 12 times a day in all (change it under **Wake-ups a day, at most**). A sticky waits 45 minutes for the report; after that it says no report came back, with a link to the run when there is one.
+
+**What an AI can and can't do.** It can read the board, and report on the stickies handed to it. It adds new stickies (in Double-check, as related tasks, at most 5 a report) only if the sticky allows **Add stickies for new things it finds**, and ticks off or adds to the checklist and sources only with **Tick off and add**. It can't delete anything or change other stickies. Every report shows on the sticky under **AI updates**.
+
+**What's kept where.** The link's secret is in `data/mcp-secret` and the AIs' addresses and tokens in `data/ai-connections.json`, both readable only by you. Tokens never go back to the app: it shows only their last 4 characters. Neither file is in `board.json` or in a downloaded backup. Through the internet, the link is the only way in for an AI (no cookies), and wrong guesses are slowed down.
+
 ### If something's wrong
 
 - **Your phone can't connect:**
   - check that it's on the same Wi-Fi as the NUC;
   - if Ubuntu's firewall is on (`sudo ufw status`), let the board through: `sudo ufw allow 3000/tcp`.
 - **The From anywhere address doesn't open:** run `scripts/linux/anywhere.sh --status`. The first time, Tailscale can take a few minutes to get the certificate. A phone signed in at the Wi-Fi address signs in once more at the internet address, because to the browser they're different places.
+- **A sticky says the AI didn't accept the token, or nothing was found at its address:** wake-ups to that AI stop until it's fixed. In the Wall tab, change it (for a Claude routine, make a new token in its API trigger), then **Send a test**.
+- **A sticky says no report came back:** open the run from the sticky to see what the AI did. A Claude routine needs the Sticky Wall connector, and the board needs From anywhere. Tap **Run now** to try again.
 - **The wall shows the wrong time:** set the NUC's time zone, for example `sudo timedatectl set-timezone America/New_York`.
 - **The remote says it can't find the wall's browser:** the wall screen has to be started by the kiosk script. Restart the NUC, or run `scripts/linux/kiosk.sh`.
 - **`npm` isn't found:** if the installer downloaded Node.js, log out and back in once so it's on your PATH.
@@ -229,6 +251,10 @@ Put any of these in a `.env` file next to `package.json` (or set them in the env
 | --- | --- | --- | --- |
 | ![Related tasks](docs/screenshots/phone-related.png) | ![Follow up?](docs/screenshots/phone-submitted-ask.png) | ![An email to follow up](docs/screenshots/phone-email-follow-up.png) | ![A follow-up reminder](docs/screenshots/phone-follow-up-nudge.png) |
 
+| The AI helper's link | The AIs the board wakes up | Adding a Claude routine | Waiting for the report |
+| --- | --- | --- | --- |
+| ![The AI helper's link](docs/screenshots/phone-ai-helper.png) | ![AIs the board wakes up](docs/screenshots/phone-ai-connections.png) | ![Adding a Claude routine](docs/screenshots/phone-ai-add-routine.png) | ![Waiting for the report](docs/screenshots/phone-ai-waiting.png) |
+
 | A sticky handed to the AI helper | Giving a new sticky to AI | Hide the Connect code? |
 | --- | --- | --- |
 | ![AI helper](docs/screenshots/phone-ai.png) | ![New sticky for AI](docs/screenshots/phone-new-ai.png) | ![Hide the code?](docs/screenshots/phone-pair-prompt.png) |
@@ -264,7 +290,8 @@ Put any of these in a `.env` file next to `package.json` (or set them in the env
   - `events.ts` sends live updates as server-sent events;
   - `remote.ts` drives the wall's browser for the phone remote through Chrome's DevTools protocol (`cdp.ts`), and reloads the wall's page if it crashes or fails to load;
   - `auth.ts` signs devices in (the PIN, and the codes the wall shows), and `server.ts` opens the second port for the internet, where everything counts as coming from outside;
-  - `screens.ts` keeps track of the wall screens.
+  - `screens.ts` keeps track of the wall screens;
+  - `mcp.ts` is the board's MCP server for AIs, `aiReport.ts` checks what an AI reports against what the sticky allows, and `ai.ts` wakes AIs when a sticky is due (the AIs themselves are kept by `aiConnections.ts`).
 - `web/` is the React app for the wall, phones and computers.
   - `store/sync.ts` applies each change on screen at once, sends it to the server in order, and keeps waiting changes through a lost connection.
   - `store/live.ts` holds the live connection open and reconnects when an iPhone drops it.
@@ -276,12 +303,12 @@ Put any of these in a `.env` file next to `package.json` (or set them in the env
   - `kiosk.sh`, which runs the full-screen browser and brings it back if it closes;
   - `update.sh`, for updates.
 
-The API, for scripts (and later, an AI assistant):
+The API, for scripts (AIs use the MCP server instead):
 
 | Request | What it does |
 | --- | --- |
 | `GET /api/state` | The whole board, with its revision number |
-| `GET /api/events` | Live updates (server-sent events): `hello`, `change`, `ticker`, `connect`, `pair`, `screens`, `ping` |
+| `GET /api/events` | Live updates (server-sent events): `hello`, `change`, `ticker`, `connect`, `pair`, `screens`, `ai`, `ping` |
 | `GET /api/session`, `POST /api/login`, `POST /api/logout` | Whether this device has to sign in and how it got in, and signing in with the PIN (`{"pin": "…"}`) and out |
 | `POST /api/pair` | Sign in with a code from the wall: `{"code": "K7QM-2XPA"}` |
 | `GET /api/pair-code`, `POST /api/pair-code` | The code the wall shows (the wall computer and wall screens only, never from the internet), and a new code for **Connect another device** |
@@ -294,10 +321,14 @@ The API, for scripts (and later, an AI assistant):
 | `POST /api/notes/:id/completions` | Recurring tasks: `{"add": [time]}` or `{"remove": [time]}` |
 | `POST /api/lanes`, `PATCH`/`DELETE /api/lanes/:id`, `PUT /api/lanes/order` | Columns |
 | `POST /api/goals`, `PATCH`/`DELETE /api/goals/:id` | Goals |
-| `PATCH /api/settings` | Night mode, wall and ticker settings |
+| `PATCH /api/settings` | Night mode, wall, ticker and AI helper settings (`{"ai": {"connect": true, "dailyCap": 12}}`) |
 | `POST /api/alerts`, `DELETE /api/alerts/:id` | Pop a note's reminder up on the wall now, and take it down |
 | `GET /api/remote` | What the wall's browser shows, and whether a text box there is selected |
 | `POST /api/remote` | Remote commands, in order: `{"commands": [{"type": "move", "dx": 40, "dy": 0}, {"type": "click"}, {"type": "text", "text": "hi"}]}`. Others are `scroll`, `key`, `back`, `reload`, `board`, `open` (`{"url": …}`) and `dialog` (`{"accept": true}`) |
+| `GET /api/ai` | The board's links for AIs, the AIs it wakes up (tokens shown as their last 4 characters), and today's wake-ups |
+| `PUT`/`DELETE /api/ai/connections/:id`, `POST /api/ai/connections/:id/test` | Add or change an AI the board wakes up (`{"kind": "routine", "name": "Claude routine", "url": "…", "token": "…"}`; leave `token` out to keep the saved one), remove it, and send it a test |
+| `POST /api/ai/mcp/rotate` | A new secret for the AIs' link (the old link stops working) |
+| `POST /mcp/<secret>` | The MCP server (Streamable HTTP), only while the AI connection is on. Tools: `list_ai_tasks`, `get_sticky`, `list_stickies` and `report_ai_run` |
 | `GET /api/export` | Download everything, trash included |
 
 Besides the usual fields, a note can have:
@@ -305,9 +336,9 @@ Besides the usual fields, a note can have:
 - `parentId`: the sticky it's a related task of;
 - `channel` (`email`, `text` or `call`) and `sentAt`, for messages;
 - `followUp`: `{"at": time, "everyDays": 14}`;
-- `ai`: the AI helper's settings.
+- `ai`: what the AI helper should do, how often, and what it may change; `requestedAt` asks for a run now, and `by` picks the AI that does it.
 
-The server sets `followedUpFor`, `aiLog` and `aiState` itself and ignores them in requests.
+The server sets `followedUpFor`, `aiLog` (the AI's reports), `aiState` (what it's doing now) and `addedBy` itself, and ignores them in requests.
 
 Changes must be sent as JSON (`Content-Type: application/json`). With a PIN, and always from the internet, everything except the health check and signing in needs the session cookie from `POST /api/login` or `POST /api/pair` (scripts on the wall computer itself, at `localhost`, don't).
 
@@ -318,8 +349,8 @@ Changes must be sent as JSON (`Content-Type: application/json`). With a PIN, and
 | `npm run dev` | The board server plus a development server with live reload, at `http://localhost:5173` (add `-- --demo` for the sample board) |
 | `npm run pin` | Set the board's PIN in `.env` (`npm run pin -- --off` removes it) |
 | `npm run typecheck` | TypeScript checks for the app, the server and the tooling |
-| `npm test` | Unit tests: the data rules, follow-up timing, the store, the API, signing in from inside and outside, wall screens, live updates, syncing, the remote's input handling, and `anywhere.sh` with a stand-in Tailscale |
-| `npm run test:e2e` | Builds, then runs a real server with headless Chromium as a phone, a computer and the wall, plus the kiosk script driving the wall's browser for the remote |
+| `npm test` | Unit tests: the data rules, follow-up timing, the store, the API, signing in from inside and outside, wall screens, live updates, syncing, the remote's input handling, `anywhere.sh` with a stand-in Tailscale, the MCP server with a client playing the AI, and the wake-ups against stand-ins (nothing is sent to a real AI) |
+| `npm run test:e2e` | Builds, then runs a real server with headless Chromium as a phone, a computer and the wall, plus the kiosk script driving the wall's browser for the remote, and an MCP client playing the AI (wake-ups go to a stand-in) |
 | `npm run build` | Production build into `dist/web` |
 | `npm run screenshots` | Renders `docs/screenshots` against a real server with the sample board (build first) |
 | `npm run build:preview-page` | A single self-contained HTML file that runs on sample data with no server |

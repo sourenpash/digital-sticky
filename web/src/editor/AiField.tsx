@@ -1,15 +1,15 @@
 import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { ExternalLink, Play, Sparkles } from 'lucide-react';
-import { defaultAiTask, nextAiRun } from '../../../shared/ai.ts';
+import { aiDue, defaultAiTask, nextAiRun, whenLabel } from '../../../shared/ai.ts';
+import type { AiOverview } from '../../../shared/api.ts';
 import { timeLabel } from '../../../shared/dates.ts';
-import { AI_SCHEDULES, type AiSchedule, type AiTask, type Note } from '../../../shared/types.ts';
+import { AI_SCHEDULES, type AiSchedule, type AiSettings, type AiTask, type Note } from '../../../shared/types.ts';
+import { useAi } from '../store/ai.ts';
+import { useBoard } from '../store/board.ts';
 import { hostOf } from './NoteEditor.tsx';
 
-// Handing a sticky to the AI helper. For now this is the settings and the reports;
-// connecting an AI to do the work (over MCP) arrives in the next update.
-
-/** Becomes a real check of the wall computer once the AI helper is set up there. */
-const ENGINE_READY = false;
+// Handing a sticky to the AI helper: what to do, how often, and which AI does it. The
+// AI connects to the board (Wall → AI helper) and reports back here.
 
 const SCHEDULE_LABEL: Record<AiSchedule, string> = { once: 'Once', daily: 'Every day', weekly: 'Every week' };
 const WEEKDAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -23,6 +23,31 @@ function dayAndTime(date: Date, now: Date): string {
   if (days === 1) return `Tomorrow ${timeLabel(date)}`;
   if (Math.abs(days) < 7) return `${format(date, 'EEE')} ${timeLabel(date)}`;
   return format(date, 'MMM d');
+}
+
+/** What the AI helper is doing with this sticky, in a sentence, and the run to open if there is one. */
+export function aiStatus(note: Note, now: Date, settings: AiSettings, overview: AiOverview | null, mode: 'edit' | 'new'): { text: string; url?: string } {
+  const ai = note.ai;
+  if (!ai) return { text: '' };
+  const state = note.aiState;
+  const by = state?.by ?? 'The AI';
+  if (state?.status === 'running') return { text: `${by} is working on it now.`, url: state.url };
+  if (state?.status === 'queued') return { text: `Asked ${by} ${whenLabel(parseISO(state.since), now)}. Waiting for its report.`, url: state.url };
+  if (state?.status === 'needs-setup') return { text: state.message ?? 'No AI is connected to the board yet. Add one in Wall → AI helper.' };
+  if (state?.status === 'error') return { text: state.message ?? 'The last check didn’t work.', url: state.url };
+  if (mode === 'new') return { text: 'It starts once the sticky is on the board.' };
+  if (!settings.connect) return { text: 'Saved. To have an AI do it, turn on Let an AI connect in Wall → AI helper.' };
+  const connection = overview ? (overview.connections.find(c => c.id === ai.by) ?? overview.connections.find(c => c.isDefault) ?? null) : undefined;
+  if (connection === null) return { text: 'Saved. No AI is set up to do it yet: add one in Wall → AI helper.' };
+  const who = connection ? ` · ${connection.name}` : '';
+  if (aiDue(note, now)) {
+    if (connection?.kind === 'self') return { text: `Due now. Waiting for ${connection.name} to check in.` };
+    if (overview && overview.wakesToday >= settings.dailyCap) return { text: `Due now, but today’s ${settings.dailyCap} wake-ups are used up. It’s asked tomorrow.` };
+    if (connection?.problem) return { text: `Due now, but ${connection.name} needs fixing: ${connection.problem}` };
+    return { text: `Due now. Asking ${connection?.name ?? 'the AI'}…` };
+  }
+  const next = nextAiRun(ai, note.aiLog?.[0]?.at, now);
+  return { text: next ? `Next check: ${dayAndTime(next, now)}${who}` : 'Done. Tap Run now to check again.' };
 }
 
 interface Props {
@@ -39,18 +64,11 @@ export function AiField({ note, notes, now, mode, onChange, onOpen, onRunNow }: 
   const ai = note.ai;
   const log = note.aiLog ?? [];
   const set = (patch: Partial<AiTask>) => ai && onChange({ ai: { ...ai, ...patch } });
-
-  let status: string;
-  if (!ai) status = '';
-  else if (note.aiState?.status === 'running') status = 'Checking now…';
-  else if (note.aiState?.status === 'needs-setup') status = 'No AI is connected to the board yet.';
-  else if (note.aiState?.status === 'error') status = `The last check didn’t work${note.aiState.message ? `: ${note.aiState.message}` : '.'}`;
-  else if (mode === 'new') status = 'It starts once the sticky is on the board.';
-  else if (!ENGINE_READY && !__DEMO_BUILD__) status = 'Saved. The AI helper starts working in the next update.';
-  else {
-    const next = nextAiRun(ai, log[0]?.at, now);
-    status = next ? `Next check: ${dayAndTime(next, now)}` : 'Done. Tap Run now to check again.';
-  }
+  const settings = useBoard().settings.ai;
+  const overview = useAi();
+  const status = aiStatus(note, now, settings, overview, mode);
+  const connections = overview?.connections ?? [];
+  const fallback = connections.find(c => c.isDefault);
 
   return (
     <fieldset className="ne-section ai">
@@ -59,7 +77,7 @@ export function AiField({ note, notes, now, mode, onChange, onOpen, onRunNow }: 
       </legend>
       {!ai ? (
         <>
-          <button type="button" className="btn ai-give" onClick={() => onChange({ ai: defaultAiTask(note) })}>
+          <button type="button" className="btn ai-give" onClick={() => onChange({ ai: defaultAiTask(note, now) })}>
             <Sparkles aria-hidden="true" /> Give this to AI
           </button>
           <p className="ne-hint">
@@ -128,8 +146,29 @@ export function AiField({ note, notes, now, mode, onChange, onOpen, onRunNow }: 
             <input type="checkbox" checked={ai.mayEdit} onChange={e => set({ mayEdit: e.target.checked })} />
             <span>Tick off and add to this sticky’s checklist and sources</span>
           </label>
+          {(connections.length > 1 || (ai.by && !connections.some(c => c.id === ai.by) && connections.length > 0)) && (
+            <label className="field" htmlFor={`ai-by-${note.id}`}>
+              <span className="field-label">Who does it</span>
+              <select id={`ai-by-${note.id}`} value={connections.some(c => c.id === ai.by) ? ai.by : ''} onChange={e => set({ by: e.target.value || undefined })}>
+                <option value="">The default{fallback ? ` (${fallback.name})` : ''}</option>
+                {connections.map(connection => (
+                  <option key={connection.id} value={connection.id}>
+                    {connection.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <p className="ai-status" role="status">
-            {status}
+            {status.text}
+            {status.url && (
+              <>
+                {' '}
+                <a href={status.url} target="_blank" rel="noopener noreferrer">
+                  Open the run <ExternalLink aria-hidden="true" className="inline-icon" />
+                </a>
+              </>
+            )}
           </p>
           <div className="ai-actions">
             {mode === 'edit' && onRunNow && (

@@ -225,13 +225,15 @@ export function EditorApp({ route, go }: { route: EditorRoute; go: (token: strin
     if (undo) showToast({ text: every ? `Nice. The next nudge is in ${every} days if you don't hear back.` : 'Nice. No more nudges.', actionLabel: 'Undo', action: undo });
   };
 
+  /** "Run now": the board asks the AI within a minute (or the AI picks it up when it checks in). */
   const runAi = () => {
-    showToast(
-      __DEMO_BUILD__
-        ? { text: 'In this preview the AI updates are samples. On the wall computer it checks for real, starting next update.' }
-        : { text: 'Saved. The AI helper starts working in the next update.' },
-      7000,
-    );
+    if (!selected?.ai) return;
+    if (__DEMO_BUILD__) {
+      showToast({ text: 'In this preview nothing is sent. On the wall computer, the AI is asked within a minute.' }, 7000);
+      return;
+    }
+    board.updateNote(selected.id, { ai: { ...selected.ai, requestedAt: currentTime().toISOString() } });
+    showToast({ text: data.settings.ai.connect ? 'Asked for a check now. The AI is asked within a minute.' : 'Saved. Turn on Let an AI connect in Wall → AI helper for it to run.' }, 7000);
   };
 
   /** Recurring tasks: log a "Did it" and say where that leaves this week. */

@@ -1,7 +1,8 @@
 // Live events from the board server that parts of the app listen for, besides board
-// changes: a device signed in with a code ("pair"), or the wall screens changed ("screens").
+// changes: a device signed in with a code ("pair"), the wall screens changed ("screens"),
+// or the AI connections did ("ai").
 
-export type ServerEvent = 'pair' | 'screens';
+export type ServerEvent = 'pair' | 'screens' | 'ai';
 
 const handlers = new Map<ServerEvent, Set<() => void>>();
 

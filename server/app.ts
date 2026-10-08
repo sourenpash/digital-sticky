@@ -7,8 +7,9 @@ import { compress } from 'hono/compress';
 import { secureHeaders } from 'hono/secure-headers';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import type { AnywhereStatus, PairCode, ScreenInfo, SessionResponse, StateResponse, WallCode } from '../shared/api.ts';
+import type { AiOverview, AnywhereStatus, PairCode, ScreenInfo, SessionResponse, StateResponse, WallCode } from '../shared/api.ts';
 import {
+  aiConnectionInputSchema,
   completionsChangeSchema,
   describeIssues,
   goalPatchSchema,
@@ -25,10 +26,13 @@ import {
 } from '../shared/schema.ts';
 import type { RemoteStatus } from '../shared/remote.ts';
 import type { Goal, Lane, Note } from '../shared/types.ts';
-import { Auth, fromThisComputer, isOutside, type LoginLimiter } from './auth.ts';
+import type { AiRunner } from './ai.ts';
+import type { AiConnections } from './aiConnections.ts';
+import { Auth, fromThisComputer, isOutside, LoginLimiter } from './auth.ts';
 import type { EventHub } from './events.ts';
 import { hostAllowed } from './hosts.ts';
 import { RemoteError, type KioskRemote } from './remote.ts';
+import { createMcp, MCP_BODY_LIMIT, MCP_CLIENT_HEADER, type McpSecret } from './mcp.ts';
 import { LOCAL_SCREEN_ID, LOCAL_SCREEN_NAME, Screens } from './screens.ts';
 import type { TickerFeed } from './ticker.ts';
 import { newId, StoreError, type BoardStore } from './store.ts';
@@ -58,12 +62,23 @@ export interface AppOptions {
   remote?: Pick<KioskRemote, 'status' | 'run'> | null;
   /** Closes the wall screen on the wall computer, so its desktop shows; null where there's none. */
   closeWall?: (() => Promise<void>) | null;
+  /** The AI helper: the MCP address's secret, the AIs that can be woken, and what wakes them. Null turns it off. */
+  ai?: AiSetup | null;
+  /** The board's address on the home Wi-Fi, for the MCP link there (defaults to connectUrl). */
+  homeUrl?: string | null | (() => string | null);
+}
+
+export interface AiSetup {
+  secret: McpSecret;
+  connections: AiConnections;
+  runner: Pick<AiRunner, 'poke' | 'test'> | null;
 }
 
 /** Open without signing in: checking the server is up, and signing in and out. */
 const OPEN_PATHS = new Set(['/api/health', '/api/session', '/api/login', '/api/logout', '/api/pair']);
 const loginSchema = z.object({ pin: z.string().max(64) });
 const pairSchema = z.object({ code: z.string().min(1).max(64) });
+const connectionId = /^[A-Za-z0-9_-]{1,64}$/;
 const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /** Every change answers with the revision that includes it (and the server run it belongs to). */
@@ -101,8 +116,11 @@ export function createApp({
   ticker = null,
   remote = null,
   closeWall = null,
+  ai = null,
+  homeUrl = connectUrl,
 }: AppOptions): Hono {
   const app = new Hono();
+  const valueOf = (url: string | null | (() => string | null)) => (typeof url === 'function' ? url() : url);
   const stamp = () => store.now().toISOString();
   const auth = givenAuth ?? new Auth({ pin: null, secret: randomBytes(32), trustLocalhost });
   const screens = givenScreens ?? new Screens(store, hub);
@@ -308,7 +326,60 @@ export function createApp({
   api.get('/state', c => {
     c.header('Cache-Control', 'no-store');
     const { epoch, rev, board } = store.snapshot();
-    return c.json({ epoch, rev, board, connectUrl: typeof connectUrl === 'function' ? connectUrl() : connectUrl } satisfies StateResponse);
+    return c.json({ epoch, rev, board, connectUrl: valueOf(connectUrl) } satisfies StateResponse);
+  });
+
+  // The AI helper: the board's MCP links and the AIs it wakes up (their tokens never come back).
+  const aiOverview = (): AiOverview => {
+    const link = (base: string | null) => (base && ai ? `${base.replace(/\/$/, '')}/mcp/${ai.secret.current}` : null);
+    return {
+      mcp: { anywhere: link(anywhereUrl), home: link(valueOf(homeUrl)), path: ai ? `/mcp/${ai.secret.current}` : null },
+      lastUsed: ai?.connections.lastUsed ?? null,
+      connections: ai?.connections.info() ?? [],
+      wakesToday: ai?.connections.wakesOn(store.now()) ?? 0,
+    };
+  };
+  const aiChanged = (c: Context) => {
+    hub.broadcast('ai', {});
+    ai?.runner?.poke();
+    return c.json(aiOverview());
+  };
+  const needAi = () => {
+    if (!ai) throw new StoreError(404, 'The AI helper is turned off on this board');
+    return ai;
+  };
+
+  api.get('/ai', c => {
+    c.header('Cache-Control', 'no-store');
+    return c.json(aiOverview());
+  });
+
+  // "Make a new link": AIs using the old one stop getting in.
+  api.post('/ai/mcp/rotate', async c => {
+    await needAi().secret.rotate();
+    return aiChanged(c);
+  });
+
+  api.put('/ai/connections/:id', async c => {
+    const id = c.req.param('id');
+    if (!connectionId.test(id)) throw new StoreError(400, 'Invalid id');
+    const input = await readBody(c, aiConnectionInputSchema);
+    await needAi().connections.put(id, input, store.now());
+    return aiChanged(c);
+  });
+
+  api.delete('/ai/connections/:id', async c => {
+    await needAi().connections.remove(c.req.param('id'));
+    return aiChanged(c);
+  });
+
+  // "Send a test": wakes it with nothing due (which may use some of its plan).
+  api.post('/ai/connections/:id/test', async c => {
+    const setup = needAi();
+    if (!setup.runner) throw new StoreError(404, 'The AI helper is turned off on this board');
+    const result = await setup.runner.test(c.req.param('id'));
+    hub.broadcast('ai', {});
+    return c.json(result);
   });
 
   api.get('/ticker', c => {
@@ -452,6 +523,53 @@ export function createApp({
 
   api.all('*', c => c.json({ error: 'Not found' }, 404));
   app.route('/api', api);
+
+  // The board's MCP server, for AIs. Its address holds a long secret, which is all the
+  // signing in there is (AIs have no cookies); it works only while "Let an AI connect" is on.
+  if (ai) {
+    const mcp = createMcp({ store, connections: ai.connections });
+    const wrongSecrets = new LoginLimiter(20, 200, 60 * 60_000);
+    const aiClients = new Map<string, string>();
+    const notFound = (c: Context) => c.json({ error: 'Not found' }, 404);
+    app.all('/mcp/:secret', async c => {
+      c.header('Cache-Control', 'no-store');
+      const client = auth.clientKey(c);
+      // Wrong guesses are slowed down; the right link always gets in, so guessers can't lock the AI out.
+      if (!ai.secret.matches(c.req.param('secret'))) {
+        const now = store.now().getTime();
+        const wait = wrongSecrets.waitFor(client, now);
+        if (wait > 0) {
+          c.header('Retry-After', String(wait));
+          return c.json({ error: 'Too many tries. Try again later.' }, 429);
+        }
+        wrongSecrets.tried(client, now);
+        return notFound(c);
+      }
+      if (!store.board.settings.ai.connect) return c.json({ error: 'The board’s AI connection is turned off. Turn it on in Wall → AI helper.' }, 403);
+      // An AI says its name when it connects; later calls (each on its own) are matched up by where they come from.
+      const size = Number(c.req.header('Content-Length') ?? Infinity);
+      if (c.req.method === 'POST' && size <= MCP_BODY_LIMIT) {
+        const body = (await c.req.raw
+          .clone()
+          .json()
+          .catch(() => null)) as { method?: unknown; params?: { clientInfo?: { name?: unknown; title?: unknown } } } | null;
+        const info = body?.method === 'initialize' ? body.params?.clientInfo : undefined;
+        const name = typeof info?.title === 'string' ? info.title : typeof info?.name === 'string' ? info.name : null;
+        if (name) {
+          aiClients.delete(client);
+          aiClients.set(client, name.slice(0, 60));
+          if (aiClients.size > 200) aiClients.delete(aiClients.keys().next().value!);
+        }
+      }
+      const headers = new Headers(c.req.raw.headers);
+      headers.delete(MCP_CLIENT_HEADER);
+      const known = aiClients.get(client);
+      if (known) headers.set(MCP_CLIENT_HEADER, known);
+      // No cookies count here, so another site's page can't use a browser's sign-in to get in.
+      return mcp.fetch(new Request(c.req.raw, { headers }));
+    });
+    app.all('/mcp/*', notFound);
+  }
 
   if (staticDir) {
     app.use(

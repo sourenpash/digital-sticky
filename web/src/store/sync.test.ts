@@ -115,6 +115,16 @@ describe('SyncEngine', () => {
     expect(server.sent).toEqual([{ type: 'note.patch', id: 'a', patch: { title: 'Call' } }]);
   });
 
+  it('keeps every setting when quick settings changes are sent as one', async () => {
+    const e = engine();
+    e.dispatch({ type: 'settings.patch', patch: { ai: { connect: true } } }, 600);
+    e.dispatch({ type: 'settings.patch', patch: { wall: { chime: false } } }, 600);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(server.sent).toHaveLength(1);
+    expect(server.board.settings.ai.connect).toBe(true);
+    expect(server.board.settings.wall.chime).toBe(false);
+  });
+
   it('sends waiting typing first when an instant change comes after it', async () => {
     const e = engine();
     e.dispatch({ type: 'note.patch', id: 'a', patch: { title: 'Typed' } }, 600);

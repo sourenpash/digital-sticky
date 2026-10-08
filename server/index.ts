@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { makeEmptyBoard } from '../shared/defaults.ts';
 import { makeSampleBoard } from '../shared/sample.ts';
-import { connectUrlFor, readConfig, type Config } from './config.ts';
+import { connectUrlFor, homeUrlFor, readConfig, type Config } from './config.ts';
 import { startServer } from './server.ts';
 
 // Starts the board server: `npm start` (or `npm run demo` for the sample board).
@@ -48,6 +48,7 @@ try {
     reset: config.demo,
     staticDir: hasApp ? staticDir : null,
     connectUrl: () => connectUrlFor(config),
+    homeUrl: () => homeUrlFor(config),
     buildId: readBuildId(),
     log: message => console.log(message),
     pin: config.pin,

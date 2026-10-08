@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { parseISO } from 'date-fns';
 import {
   Bell,
   ChevronDown,
@@ -13,12 +12,10 @@ import {
   MousePointer2,
   Plus,
   RotateCw,
-  Sparkles,
   Trash2,
   TrendingUp,
   X,
 } from 'lucide-react';
-import { describeAiSchedule, whenLabel } from '../../../shared/ai.ts';
 import { lanesInOrder } from '../../../shared/board.ts';
 import { CRYPTO_SYMBOL, MAX_CRYPTO, MAX_NEWS, MAX_STOCKS, NEWS_SOURCES, STOCK_SYMBOL, newsTag } from '../../../shared/ticker.ts';
 import { LANE_KINDS, NOTE_COLORS, type Board, type Lane, type LaneKind, type NightMode, type NightStyle, type Settings, type TickerSettings } from '../../../shared/types.ts';
@@ -26,6 +23,7 @@ import { board as store, reloadWall, useSync } from '../store/board.ts';
 import { logout, useSession } from '../store/session.ts';
 import { showToast } from '../store/toasts.ts';
 import { Wall } from '../wall/Wall.tsx';
+import { AiHelperSection } from './AiSections.tsx';
 import { ConnectSection, WallScreensSection } from './DevicesSections.tsx';
 import { normalizeUrl } from './NoteEditor.tsx';
 import { Switch } from './Switch.tsx';
@@ -293,51 +291,6 @@ function ColumnsSection({ board }: { board: Board }) {
   );
 }
 
-/** The stickies handed to the AI helper, and how it gets set up on the wall computer. */
-function AiSection({ board, now, go }: { board: Board; now: Date; go: (token: string) => void }) {
-  const handed = board.notes.filter(note => note.ai && !note.done);
-  return (
-    <section className="set-group">
-      <h3>
-        <Sparkles aria-hidden="true" /> AI helper
-      </h3>
-      <p className="set-note">
-        Give any sticky to the AI helper with <strong>Give this to AI</strong> in its menu. It looks things up on the web on the schedule you pick, reports back on the
-        sticky, and can add stickies for new things it finds.
-      </p>
-      {handed.length > 0 ? (
-        <ul className="ai-list">
-          {handed.map(note => {
-            const last = note.aiLog?.[0];
-            return (
-              <li key={note.id}>
-                <button type="button" className="remote-card ai-card" onClick={() => go(`note-${note.id}`)}>
-                  <Sparkles aria-hidden="true" />
-                  <span className="remote-card-text">
-                    <span className="remote-card-title">{note.title || 'Untitled note'}</span>
-                    <span className="remote-card-hint">
-                      {note.ai ? describeAiSchedule(note.ai) : ''}
-                      {last ? ` · checked ${whenLabel(parseISO(last.at), now)}` : ''}
-                    </span>
-                  </span>
-                  <ChevronRight aria-hidden="true" />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      ) : (
-        <p className="set-note">No stickies are handed to it yet.</p>
-      )}
-      <p className="set-note">
-        {__DEMO_BUILD__
-          ? 'In this preview the AI updates are samples.'
-          : 'Not set up yet. In the next update, an AI of your choice connects to the board to do these: a Claude routine, Claude Code or OpenClaw, for example.'}
-      </p>
-    </section>
-  );
-}
-
 function PinSection({ go }: { go: (token: string) => void }) {
   const session = useSession();
   let body;
@@ -466,7 +419,7 @@ export function DisplayTab({ board, now, desktop, go }: { board: Board; now: Dat
           )}
         </section>
 
-        <AiSection board={board} now={now} go={go} />
+        <AiHelperSection board={board} now={now} go={go} />
 
         <TickerSection ticker={board.settings.ticker} />
 

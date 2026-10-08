@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AI_CONNECTION_KINDS } from './ai.ts';
 import { DEFAULT_SETTINGS } from './defaults.ts';
 import { MAX_REMOTE_COMMANDS, MAX_REMOTE_STEP, MAX_REMOTE_TEXT, REMOTE_KEYS } from './remote.ts';
 import { CRYPTO_SYMBOL, MAX_CRYPTO, MAX_NEWS, MAX_STOCKS, NEWS_SOURCE_IDS, STOCK_SYMBOL } from './ticker.ts';
@@ -9,6 +10,7 @@ import {
   CHANNELS,
   GOAL_MEASURES,
   LANE_KINDS,
+  MAX_AI_LOG,
   NIGHT_MODES,
   NIGHT_STYLES,
   NOTE_COLORS,
@@ -66,9 +68,6 @@ const checklist = z.array(checklistItemSchema).max(200);
 const links = z.array(sourceLinkSchema).max(100);
 const completions = z.array(dateTime).max(1000);
 
-/** Most runs a note keeps in its AI log (newest first). */
-export const MAX_AI_LOG = 10;
-
 const followUpSchema = z.object({ at: dateTime, everyDays: z.number().int().min(0).max(366) });
 const aiTaskSchema = z.object({
   instructions: z.string().max(4000),
@@ -77,6 +76,9 @@ const aiTaskSchema = z.object({
   weekday: z.number().int().min(0).max(6).optional(),
   mayAdd: z.boolean(),
   mayEdit: z.boolean(),
+  since: dateTime.optional(),
+  requestedAt: dateTime.optional(),
+  by: id.optional(),
 });
 const aiRunSchema = z.object({
   id,
@@ -86,7 +88,13 @@ const aiRunSchema = z.object({
   links: z.array(z.object({ url: webAddress, label: z.string().max(200).optional() })).max(20),
   added: z.array(id).max(20),
 });
-const aiStateSchema = z.object({ status: z.enum(AI_STATES), message: z.string().max(500).optional(), since: dateTime });
+const aiStateSchema = z.object({
+  status: z.enum(AI_STATES),
+  message: z.string().max(500).optional(),
+  since: dateTime,
+  by: z.string().max(80).optional(),
+  url: webAddress.optional(),
+});
 
 export const noteSchema = z.object({
   id,
@@ -209,6 +217,14 @@ const tickerSchema = z.object({
   news: z.array(z.union([z.enum(NEWS_SOURCE_IDS), webAddress])).max(MAX_NEWS),
 });
 
+/** Most AI wake-ups the daily limit can be set to. */
+export const MAX_AI_DAILY_CAP = 100;
+
+const aiSettingsSchema = z.object({
+  connect: z.boolean(),
+  dailyCap: z.number().int().min(1).max(MAX_AI_DAILY_CAP),
+});
+
 export const settingsSchema = z.object({
   night: z.object({
     mode: z.enum(NIGHT_MODES),
@@ -221,14 +237,16 @@ export const settingsSchema = z.object({
     chime: z.boolean(),
     alertMinutes: z.number().int().min(1).max(24 * 60),
   }),
-  // Boards saved before the ticker existed get the default one.
+  // Boards saved before the ticker (or the AI helper) existed get the default one.
   ticker: tickerSchema.default(() => structuredClone(DEFAULT_SETTINGS.ticker)),
+  ai: aiSettingsSchema.default(() => structuredClone(DEFAULT_SETTINGS.ai)),
 });
 
 export const settingsPatchSchema = z.object({
   night: settingsSchema.shape.night.partial().optional(),
   wall: settingsSchema.shape.wall.partial().optional(),
   ticker: tickerSchema.partial().optional(),
+  ai: aiSettingsSchema.partial().optional(),
 });
 
 /** Most reminders that can be showing at once. */
@@ -270,6 +288,20 @@ export const trashSchema = z.object({
   lanes: z.array(z.object({ lane: laneSchema, notes: z.array(noteSchema), deletedAt: dateTime })),
   goals: z.array(z.object({ goal: goalSchema, deletedAt: dateTime })),
 });
+
+/** Most AI connections the board keeps. */
+export const MAX_AI_CONNECTIONS = 20;
+
+/** PUT api/ai/connections/:id. A token left out keeps the saved one; an empty one removes it. */
+export const aiConnectionInputSchema = z.object({
+  kind: z.enum(AI_CONNECTION_KINDS),
+  name: z.string().trim().min(1, 'Give it a name').max(60),
+  url: z.union([webAddress, z.literal('')]).optional(),
+  token: z.string().trim().max(2000).optional(),
+  makeDefault: z.boolean().optional(),
+});
+
+export type AiConnectionInput = z.output<typeof aiConnectionInputSchema>;
 
 /** Most devices that can be set up as wall screens. */
 export const MAX_SCREENS = 50;

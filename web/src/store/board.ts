@@ -301,10 +301,12 @@ export const board = {
     const night = diff(before.night, after.night);
     const wall = diff(before.wall, after.wall);
     const ticker = diff(before.ticker, after.ticker);
+    const ai = diff(before.ai, after.ai);
     if (Object.keys(night).length) patch.night = night;
     if (Object.keys(wall).length) patch.wall = wall;
     if (Object.keys(ticker).length) patch.ticker = ticker;
-    if (patch.night || patch.wall || patch.ticker) engine.dispatch({ type: 'settings.patch', patch });
+    if (Object.keys(ai).length) patch.ai = ai;
+    if (Object.keys(patch).length) engine.dispatch({ type: 'settings.patch', patch });
   },
 
   addLane(title: string, kind: LaneKind = 'note'): void {

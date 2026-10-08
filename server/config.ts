@@ -89,7 +89,11 @@ export function lanAddress(interfaces = networkInterfaces()): string | null {
 }
 
 export function connectUrlFor(config: Config, interfaces = networkInterfaces()): string | null {
-  if (config.publicUrl) return config.publicUrl;
+  return config.publicUrl ?? homeUrlFor(config, interfaces);
+}
+
+/** The board's address on the home network (by this computer's address there), or null when it has none. */
+export function homeUrlFor(config: Config, interfaces = networkInterfaces()): string | null {
   const address = lanAddress(interfaces);
   return address ? `http://${address}${config.port === 80 ? '' : `:${config.port}`}` : null;
 }

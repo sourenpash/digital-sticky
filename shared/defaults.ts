@@ -14,6 +14,8 @@ export const DEFAULT_SETTINGS: Settings = {
   // A new board shows the "Connect your phone" code until it's switched off.
   wall: { showConnect: true, chime: true, alertMinutes: 60 },
   ticker: { show: true, crypto: ['BTC', 'ETH'], stocks: ['AAPL', 'NVDA', 'MSFT', 'GOOGL'], news: ['hn', 'verge'] },
+  // No AI can connect until it's switched on in the Wall tab.
+  ai: { connect: false, dailyCap: 12 },
 };
 
 /** A fresh board: the default columns, nothing on them yet. */

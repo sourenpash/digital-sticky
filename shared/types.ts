@@ -47,7 +47,16 @@ export interface AiTask {
   mayAdd: boolean;
   /** It may tick off and add to this sticky's checklist and links. */
   mayEdit: boolean;
+  /** When it was handed to the AI (ISO date-time): scheduled checks count from then. */
+  since?: string;
+  /** "Run now": asked for a check outside the schedule (ISO date-time). */
+  requestedAt?: string;
+  /** The AI connection that does it (an id from the Wall tab); none means the default one. */
+  by?: string;
 }
+
+/** Most runs a note keeps in its AI log (newest first). */
+export const MAX_AI_LOG = 10;
 
 /** One run of the AI helper. */
 export interface AiRun {
@@ -63,11 +72,18 @@ export interface AiRun {
 
 export const AI_STATES = ['queued', 'running', 'needs-setup', 'error'] as const;
 
-/** What the AI helper is doing with a sticky right now. */
+/**
+ * What the AI helper is doing with a sticky right now: `queued` once an AI has been
+ * woken up for it, `running` once the AI has picked it up, until it reports back.
+ */
 export interface AiState {
   status: (typeof AI_STATES)[number];
   message?: string;
   since: string;
+  /** The AI connection's name, for "Asked Claude routine at 8 AM". */
+  by?: string;
+  /** Where to watch the run (a Claude routine's session), when the AI gives one. */
+  url?: string;
 }
 
 export interface Lane {
@@ -189,10 +205,18 @@ export interface TickerSettings {
   news: string[];
 }
 
+/** The AI helper: whether an AI may connect to the board (over MCP), and how often it may be woken. */
+export interface AiSettings {
+  connect: boolean;
+  /** Most wake-ups a day, across all AI connections. */
+  dailyCap: number;
+}
+
 export interface Settings {
   night: { mode: NightMode; start: string; end: string; style: NightStyle };
   wall: { showConnect: boolean; chime: boolean; alertMinutes: number };
   ticker: TickerSettings;
+  ai: AiSettings;
 }
 
 /** A reminder that has gone off and is showing on the wall. */

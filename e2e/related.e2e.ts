@@ -84,7 +84,16 @@ describe('AI helper', () => {
     await onWall.locator('.note-ai').waitFor({ timeout: 5000 });
     await expect
       .poll(async () => (await h.saved()).board.notes.find(n => n.title.startsWith('Check government'))?.ai)
-      .toEqual({ instructions: 'Check government websites for funding updates', schedule: 'weekly', weekday: 1, time: '07:30', mayAdd: false, mayEdit: false });
+      .toEqual({
+        instructions: 'Check government websites for funding updates',
+        schedule: 'weekly',
+        weekday: 1,
+        time: '07:30',
+        mayAdd: false,
+        mayEdit: false,
+        // Handed over now: the first check is the next Monday at 7:30.
+        since: new Date(NOW).toISOString(),
+      });
 
     // The sample's AI sticky shows what it found, and links to the sticky it added.
     await phone.getByRole('button', { name: 'Wall', exact: true }).click();

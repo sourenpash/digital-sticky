@@ -3,10 +3,13 @@ import { execFile } from 'node:child_process';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { Board } from '../shared/types.ts';
+import { AiRunner, type Fetch as AiFetch } from './ai.ts';
+import { AiConnections } from './aiConnections.ts';
 import { createApp } from './app.ts';
 import { Auth, loadSecret } from './auth.ts';
 import { EventHub } from './events.ts';
 import { startReminders } from './reminders.ts';
+import { McpSecret } from './mcp.ts';
 import { KioskRemote } from './remote.ts';
 import { Screens } from './screens.ts';
 import { TickerFeed, type Fetcher } from './ticker.ts';
@@ -48,6 +51,12 @@ export interface StartOptions {
   remoteDebugPort?: number | null;
   /** The script that runs the wall screen (scripts/linux/kiosk.sh), for "Exit to desktop"; none turns that off. */
   kioskScript?: string | null;
+  /** The board's address on the home Wi-Fi (for the MCP link there); defaults to connectUrl. */
+  homeUrl?: string | null | (() => string | null);
+  /** How the AI helper wakes AIs up (tests pass a stand-in). */
+  aiFetch?: AiFetch;
+  /** How often the AI helper checks for due stickies. */
+  aiTickMs?: number;
 }
 
 /** Closes the wall screen with its script (`kiosk.sh --stop`), so the desktop shows. */
@@ -93,6 +102,23 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     now: options.now,
   });
   const screens = new Screens(store, hub);
+  // The AI helper: AIs connect over MCP (at /mcp/<secret>) and are woken when a sticky is due.
+  const aiConnections = await AiConnections.open(options.dataDir, options.log);
+  const mcpSecret = await McpSecret.open(options.dataDir);
+  const valueOf = (url: string | null | (() => string | null) | undefined) => (typeof url === 'function' ? url() : (url ?? null));
+  const homeUrl = options.homeUrl ?? options.connectUrl;
+  const aiRunner = new AiRunner({
+    store,
+    connections: aiConnections,
+    // Passed on to webhooks: the address that works from anywhere, if there is one.
+    mcpUrl: () => {
+      const base = options.anywhereUrl ?? valueOf(homeUrl);
+      return base ? `${base.replace(/\/$/, '')}/mcp/${mcpSecret.current}` : null;
+    },
+    fetch: options.aiFetch,
+    tickMs: options.aiTickMs,
+    log: options.log,
+  });
   const ticker = options.tickerFetch === false ? null : new TickerFeed(store, { fetcher: options.tickerFetch, log: options.log });
   ticker?.subscribe(() => hub.broadcast('ticker', {}));
   // The port is only known once listening (tests ask for any free one).
@@ -114,6 +140,8 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     ticker,
     remote,
     closeWall: options.kioskScript ? kioskCloser(options.kioskScript) : null,
+    ai: { secret: mcpSecret, connections: aiConnections, runner: aiRunner },
+    homeUrl,
   });
 
   const server = await listen(app.fetch, options.port, options.host ?? '0.0.0.0');
@@ -131,6 +159,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
   }
   const stopReminders = startReminders(store, { tickMs: options.reminderTickMs, log: options.log });
   const stopScreens = screens.start();
+  const stopAi = aiRunner.start();
   ticker?.start();
   remote?.start();
   // Tell open screens when the phone address changes (it's often unknown for a moment at boot).
@@ -150,6 +179,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
   const closeServer = () => {
     stopReminders();
     stopScreens();
+    stopAi();
     ticker?.stop();
     remote?.close();
     if (addressWatch) clearInterval(addressWatch);
@@ -168,6 +198,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     async stop() {
       closeServer();
       await store.close();
+      await aiConnections.flush();
     },
     stopNow() {
       store.flushSync();

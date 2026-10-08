@@ -1,6 +1,6 @@
 import { isNudgeTime } from './followups.ts';
 import { pruneCompletions } from './recurring.ts';
-import type { Alert, Board, Goal, Lane, Note, ServerNoteField, Settings } from './types.ts';
+import { MAX_AI_LOG, type AiRun, type AiState, type Alert, type Board, type ChecklistItem, type Goal, type Lane, type Note, type ServerNoteField, type Settings, type SourceLink } from './types.ts';
 
 // Every change to the board is one of these operations. The server applies them to
 // the saved board, and phones and computers apply the same ones straight away
@@ -18,6 +18,7 @@ export interface SettingsPatch {
   night?: Partial<Settings['night']>;
   wall?: Partial<Settings['wall']>;
   ticker?: Partial<Settings['ticker']>;
+  ai?: Partial<Settings['ai']>;
 }
 
 export type Op =
@@ -53,11 +54,28 @@ export interface ReminderFire {
   kind?: 'follow';
 }
 
+/** An AI's report on a sticky (see server/aiReport.ts, which checks it and builds this). */
+export interface AiReport {
+  noteId: string;
+  run: AiRun;
+  /** Stickies it found, as related tasks of this one. */
+  add: Note[];
+  /** The sticky's checklist and sources with its changes, when it may change them. */
+  checklist?: ChecklistItem[];
+  links?: SourceLink[];
+}
+
 /**
  * Changes only the server makes. Every 10 seconds it shows reminders and follow-up
  * nudges that are due and takes down ones that have been up long enough, as one change.
+ * An AI reports back on a sticky, and the board notes what the AI helper is doing
+ * (`ai.state`: null clears it).
  */
-export type ServerOp = Op | { type: 'reminders.tick'; fire: ReminderFire[]; expire: string[] };
+export type ServerOp =
+  | Op
+  | { type: 'reminders.tick'; fire: ReminderFire[]; expire: string[] }
+  | ({ type: 'ai.report' } & AiReport)
+  | { type: 'ai.state'; ids: string[]; state: AiState | null };
 
 /** Applies a patch: `null` (or `undefined`) removes a field, anything else replaces it. */
 export function applyPatch<T extends object>(target: T, patch: object): T {
@@ -205,6 +223,7 @@ export function applyOp(board: Board, op: ServerOp, now: Date): Board {
           night: { ...board.settings.night, ...definedOnly(op.patch.night) },
           wall: { ...board.settings.wall, ...definedOnly(op.patch.wall) },
           ticker: { ...board.settings.ticker, ...definedOnly(op.patch.ticker) },
+          ai: { ...board.settings.ai, ...definedOnly(op.patch.ai) },
         },
       };
 
@@ -239,6 +258,36 @@ export function applyOp(board: Board, op: ServerOp, now: Date): Board {
         }
       }
       return notes === board.notes && alerts === board.alerts ? board : { ...board, notes, alerts };
+    }
+
+    case 'ai.report': {
+      const note = board.notes.find(n => n.id === op.noteId);
+      // Already in (sent twice), or the sticky is gone.
+      if (!note || note.aiLog?.some(run => run.id === op.run.id)) return board;
+      const { aiState: _done, ...rest } = note;
+      const reported: Note = {
+        ...rest,
+        aiLog: [op.run, ...(note.aiLog ?? [])].slice(0, MAX_AI_LOG),
+        ...(op.checklist ? { checklist: op.checklist } : {}),
+        ...(op.links ? { links: op.links } : {}),
+        updatedAt: stamp,
+      };
+      const have = new Set(board.notes.map(n => n.id));
+      const added = op.add.filter(n => !have.has(n.id));
+      return { ...board, notes: [...board.notes.map(n => (n === note ? reported : n)), ...added] };
+    }
+
+    case 'ai.state': {
+      const ids = new Set(op.ids);
+      let changed = false;
+      const notes = board.notes.map(note => {
+        if (!ids.has(note.id) || (!note.aiState && !op.state)) return note;
+        changed = true;
+        if (op.state) return { ...note, aiState: op.state };
+        const { aiState: _cleared, ...rest } = note;
+        return rest;
+      });
+      return changed ? { ...board, notes } : board;
     }
   }
 }

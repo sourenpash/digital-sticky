@@ -1,3 +1,4 @@
+import type { AiConnectionKind } from './ai.ts';
 import type { Op } from './ops.ts';
 import type { Board } from './types.ts';
 
@@ -80,6 +81,44 @@ export type WallCode = PairCode | { code: null };
 /** GET api/anywhere: the board's internet address, when it can be used from anywhere. */
 export interface AnywhereStatus {
   url: string | null;
+}
+
+/** An AI connection (GET api/ai). Its token is never sent back, only its last 4 characters. */
+export interface AiConnectionInfo {
+  id: string;
+  kind: AiConnectionKind;
+  name: string;
+  /** The routine's fire address, OpenClaw's address, or the webhook's. */
+  url: string | null;
+  /** "abcd" of a token ending in abcd; null when none is saved. */
+  tokenEnd: string | null;
+  isDefault: boolean;
+  /** What's wrong, when wake-ups have stopped until it's fixed (a wrong token, say). */
+  problem: string | null;
+  /** The last time the board woke it (or tried to). */
+  lastWake: { at: string; ok: boolean; message: string; url?: string } | null;
+}
+
+/** GET api/ai: how AIs connect to the board, and the ones that can be woken. */
+export interface AiOverview {
+  /**
+   * The board's MCP links (they include a secret): from anywhere, and on the home Wi-Fi,
+   * when the board knows those addresses. `path` is the link's path, for the app to put
+   * after its own address when it knows neither.
+   */
+  mcp: { anywhere: string | null; home: string | null; path: string | null };
+  /** The last time an AI used the board over MCP, and which. */
+  lastUsed: { at: string; client: string } | null;
+  connections: AiConnectionInfo[];
+  /** Wake-ups so far today (the limit is settings.ai.dailyCap). */
+  wakesToday: number;
+}
+
+/** POST api/ai/connections/:id/test */
+export interface AiTestResult {
+  ok: boolean;
+  message: string;
+  url?: string;
 }
 
 export interface ApiRequest {

@@ -289,6 +289,11 @@ export class BoardStore {
 
       case 'alert.dismiss': // already gone (it timed out, or another phone got there first) is fine
       case 'reminders.tick':
+      case 'ai.state':
+        break;
+
+      case 'ai.report':
+        this.note(op.noteId);
         break;
     }
 

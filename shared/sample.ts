@@ -1,5 +1,6 @@
 import { addDays, addMonths, endOfMonth, format, getDay, set, startOfDay, startOfWeek } from 'date-fns';
 import { DEFAULT_LANES, DEFAULT_SETTINGS } from './defaults.ts';
+import type { AiOverview } from './api.ts';
 import type { AiRun, Board, ChecklistItem, Goal, Note, SourceLink } from './types.ts';
 
 // Sample board for the preview page and `npm run demo`. Dates are relative to "now"
@@ -347,6 +348,7 @@ export function makeSampleBoard(now: Date): Board {
       night: { mode: 'off', start: '22:00', end: '07:00', style: 'dim' },
       wall: { showConnect: false, chime: true, alertMinutes: 60 },
       ticker: structuredClone(DEFAULT_SETTINGS.ticker),
+      ai: { connect: true, dailyCap: 12 },
     },
     alerts: [],
   };
@@ -360,3 +362,27 @@ export const SAMPLE_ANYWHERE_URL = 'https://nuc.tail1234.ts.net';
 
 /** The sign-in code the preview page's wall shows. */
 export const SAMPLE_PAIR_CODE = 'K7QM2XPA';
+
+/** A made-up secret for the preview page's MCP links. */
+const SAMPLE_MCP_SECRET = 'q8Zr2VtXnK4mWc7LhP0sJdYfB6eUa1Gi9oT3xR5wNvE';
+
+/** The preview page's AI helper: a Claude routine that woke up for this morning's check. */
+export function sampleAiOverview(now: Date): AiOverview {
+  return {
+    mcp: { anywhere: `${SAMPLE_ANYWHERE_URL}/mcp/${SAMPLE_MCP_SECRET}`, home: `${SAMPLE_CONNECT_URL}/mcp/${SAMPLE_MCP_SECRET}`, path: `/mcp/${SAMPLE_MCP_SECRET}` },
+    lastUsed: { at: at(now, 8, 2), client: 'Claude' },
+    connections: [
+      {
+        id: 'sample-routine',
+        kind: 'routine',
+        name: 'Claude routine',
+        url: 'https://api.anthropic.com/v1/claude_code/routines/trig_01Hx7sQ2mVb9WcK4pLz/fire',
+        tokenEnd: 'x7Qa',
+        isDefault: true,
+        problem: null,
+        lastWake: { at: at(now, 8), ok: true, message: 'Woken up.', url: 'https://claude.ai/code' },
+      },
+    ],
+    wakesToday: 1,
+  };
+}

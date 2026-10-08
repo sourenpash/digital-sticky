@@ -122,6 +122,35 @@ const wallScreens = async (api: Api, server: RunningServer) => {
 };
 const ipad = { width: 1180, height: 820 };
 
+/**
+ * Stands in for the AIs the board wakes up: nothing is sent anywhere. It answers like a
+ * Claude routine does, with a link to the run.
+ */
+const fakeAiFetch = async () => new Response(JSON.stringify({ type: 'routine_fire', claude_code_session_url: 'https://claude.ai/code' }), { status: 200 });
+/** A Claude routine set up in the Wall tab, woken once this morning (by a test). */
+const claudeRoutine = async (api: Api) => {
+  await api.send('PUT', '/api/ai/connections/routine1', {
+    kind: 'routine',
+    name: 'Claude routine',
+    url: 'https://api.anthropic.com/v1/claude_code/routines/trig_01Hx7sQ2mVb9WcK4pLz/fire',
+    token: 'sk-ant-oat01-sample-token-x7Qa',
+  });
+  await api.send('POST', '/api/ai/connections/routine1/test', {});
+};
+/** The grants check is asked for again (Run now), so the routine is woken and the sticky waits for its report. */
+const askAgain = async (api: Api) => {
+  await claudeRoutine(api);
+  const { board } = (await api.get('/api/state')) as StateResponse;
+  const check = board.notes.find(note => note.ai);
+  if (check?.ai) await api.send('PATCH', `/api/notes/${check.id}`, { ai: { ...check.ai, requestedAt: new Date(Date.parse(NOW) - 60_000).toISOString() } });
+  // The board asks the AI a moment after a change (and the wake-up just above was a minute ago).
+  await new Promise(resolve => setTimeout(resolve, 2500));
+};
+const showAiHelper = async (page: Page) => {
+  await page.locator('#ai-helper').evaluate(el => el.scrollIntoView({ block: 'start' }));
+  await page.waitForTimeout(300);
+};
+
 const shots: Shot[] = [
   { keep: true, name: 'wall-day', hash: 'wall', viewport: hd },
   { keep: true, name: 'wall-first-day', hash: 'wall', viewport: hd, empty: true },
@@ -172,10 +201,10 @@ const shots: Shot[] = [
       await page.locator('.ne-label', { hasText: 'Follow up' }).evaluate(el => el.scrollIntoView({ block: 'start' }));
       await page.waitForTimeout(300);
     } },
-  { name: 'phone-ai-dark', hash: 'board', ...onPhone, colorScheme: 'dark', act: openNote(/Check grants\.gov/, 'AI helper') },
+  { name: 'phone-ai-dark', hash: 'board', ...onPhone, colorScheme: 'dark', setup: claudeRoutine, act: openNote(/Check grants\.gov/, 'AI helper') },
   { keep: true, name: 'phone-follow-up-nudge', hash: 'board', ...onPhone, setup: followUpDue },
   { name: 'wall-follow-up-banner', hash: 'wall', viewport: hd, setup: followUpDue },
-  { keep: true, name: 'phone-ai', hash: 'board', ...onPhone, act: openNote(/Check grants\.gov/, 'AI helper') },
+  { keep: true, name: 'phone-ai', hash: 'board', ...onPhone, setup: claudeRoutine, act: openNote(/Check grants\.gov/, 'AI helper') },
   {
     keep: true,
     name: 'phone-new-ai',
@@ -347,6 +376,60 @@ const shots: Shot[] = [
   { name: 'phone-connect-home', hash: 'display', ...onPhone, away: true, act: showSetting('Connect a phone or computer') },
   { keep: true, name: 'phone-wall-screens', hash: 'display', ...onPhone, away: true, setup: wallScreens, act: showSetting('Wall screens') },
   { name: 'phone-wall-screens-dark', hash: 'display', ...onPhone, away: true, colorScheme: 'dark', setup: wallScreens, act: showSetting('Wall screens') },
+  { keep: true, name: 'phone-ai-helper', hash: 'display', ...onPhone, anywhere: true, away: true, setup: claudeRoutine, act: showAiHelper },
+  {
+    keep: true,
+    name: 'phone-ai-connections',
+    hash: 'display',
+    ...onPhone,
+    anywhere: true,
+    away: true,
+    setup: claudeRoutine,
+    act: async page => {
+      await page.getByRole('heading', { name: 'AIs the board wakes up' }).evaluate(el => el.scrollIntoView({ block: 'start' }));
+      await page.waitForTimeout(300);
+    },
+  },
+  { name: 'phone-ai-helper-dark', hash: 'display', ...onPhone, colorScheme: 'dark', anywhere: true, away: true, setup: claudeRoutine, act: showAiHelper },
+  {
+    keep: true,
+    name: 'phone-ai-add-routine',
+    hash: 'display',
+    ...onPhone,
+    anywhere: true,
+    away: true,
+    act: async page => {
+      await page.getByRole('button', { name: 'Add an AI' }).click();
+      await page.getByRole('radio', { name: /Claude routine/ }).click();
+      await page.locator('.ai-editor').evaluate(el => el.scrollIntoView({ block: 'start' }));
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    name: 'phone-ai-add-kinds',
+    hash: 'display',
+    ...onPhone,
+    away: true,
+    act: async page => {
+      await page.getByRole('button', { name: 'Add an AI' }).click();
+      await page.locator('.ai-editor').evaluate(el => el.scrollIntoView({ block: 'center' }));
+      await page.waitForTimeout(300);
+    },
+  },
+  { keep: true, name: 'phone-ai-waiting', hash: 'board', ...onPhone, anywhere: true, away: true, setup: askAgain, act: openNote(/Check grants\.gov/, 'AI helper') },
+  {
+    name: 'phone-ai-needs-setup',
+    hash: 'board',
+    ...onPhone,
+    away: true,
+    setup: async api => {
+      const { board } = (await api.get('/api/state')) as StateResponse;
+      const check = board.notes.find(note => note.ai);
+      if (check?.ai) await api.send('PATCH', `/api/notes/${check.id}`, { ai: { ...check.ai, requestedAt: new Date(Date.parse(NOW) - 60_000).toISOString() } });
+      await new Promise(resolve => setTimeout(resolve, 2500));
+    },
+    act: openNote(/Check grants\.gov/, 'AI helper'),
+  },
   {
     keep: true,
     name: 'ipad-wall-screen',
@@ -398,10 +481,12 @@ try {
       seed: shot.empty ? makeEmptyBoard : () => makeSampleBoard(new Date(NOW)),
       staticDir,
       connectUrl: anywhere ? SAMPLE_ANYWHERE_URL : SAMPLE_CONNECT_URL,
+      homeUrl: SAMPLE_CONNECT_URL,
       ...(anywhere ? { publicPort: PUBLIC_PORT, anywhereUrl: SAMPLE_ANYWHERE_URL, outsideHttps: false } : {}),
       buildId,
       now: () => new Date(Date.now() + offset),
       tickerFetch: fakeTickerFetch,
+      aiFetch: fakeAiFetch,
       pin: shot.pin ? '482915' : null,
       reminderTickMs: 500,
       remoteDebugPort: shot.kiosk ? KIOSK_DEBUG_PORT : null,

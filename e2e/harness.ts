@@ -14,11 +14,20 @@ import { fakeTickerFetch } from './tickerFixtures.ts';
 // PW_CHROMIUM to use another one. With `kiosk`, the wall computer's own browser runs
 // too, started by the real kiosk script (scripts/linux/kiosk.sh, with Chromium
 // headless), and tests look into it through its debugging port like the server does.
+// The AIs the board wakes up are never reached: a stand-in records each wake-up and
+// answers like a Claude routine.
 
 const CHROMIUM = process.env.PW_CHROMIUM ?? '/opt/pw-browsers/chromium';
 const staticDir = resolve('dist/web');
 
 export type Device = 'phone' | 'computer' | 'wall';
+
+/** A wake-up the board sent to an AI (to the stand-in). */
+export interface WakeUp {
+  url: string;
+  headers: Record<string, string>;
+  body: Record<string, unknown>;
+}
 
 const VIEWPORTS: Record<Device, { width: number; height: number }> = {
   phone: { width: 390, height: 844 },
@@ -31,6 +40,8 @@ export class Harness {
   dataDir = '';
   port = 0;
   pageErrors: string[] = [];
+  /** Every wake-up sent to an AI, newest last. */
+  wakeUps: WakeUp[] = [];
   private browser: Browser | null = null;
   private contexts: BrowserContext[] = [];
   private readonly seed: (now: Date) => Board;
@@ -88,6 +99,7 @@ export class Harness {
     this.dataDir = await mkdtemp(join(tmpdir(), 'sticky-e2e-'));
     this.port = 0;
     this.pageErrors = [];
+    this.wakeUps = [];
     this.offset = this.startAt ? Date.parse(this.startAt) - Date.now() : 0;
     if (this.withKiosk) this.kioskPort = await freePort();
     if (this.withOutside) {
@@ -158,6 +170,10 @@ export class Harness {
       reminderTickMs: 250,
       pin: this.pin,
       tickerFetch: fakeTickerFetch,
+      aiFetch: async (url, init) => {
+        this.wakeUps.push({ url, headers: init.headers as Record<string, string>, body: JSON.parse(String(init.body)) as Record<string, unknown> });
+        return new Response(JSON.stringify({ type: 'routine_fire', claude_code_session_id: 'session_test', claude_code_session_url: 'https://claude.ai/code/session_test' }));
+      },
       remoteDebugPort: this.kioskPort,
       // Pages reach the internet door over plain http here, so its cookies can't be Secure.
       ...(this.withOutside ? { publicPort: this.publicPort, anywhereUrl: this.outsideUrl, outsideHttps: false } : {}),

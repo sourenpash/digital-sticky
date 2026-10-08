@@ -125,3 +125,43 @@ describe('applyOp', () => {
     expect(applyOp(board, { type: 'alert.dismiss', id: 'a1' }, later).alerts).toHaveLength(0);
   });
 });
+
+describe('the AI helper’s changes', () => {
+  const ai = { instructions: 'Check grants.gov', schedule: 'daily' as const, time: '08:00', mayAdd: true, mayEdit: true };
+  const run = { id: 'r1', at: now.toISOString(), status: 'done' as const, summary: 'Two new calls.', links: [], added: ['n2'] };
+
+  it('adds a report once, with the stickies it found, and clears what it was doing', () => {
+    const waiting = note({ ai, aiState: { status: 'queued', since: now.toISOString(), by: 'Claude routine' } });
+    const found = note({ id: 'n2', laneId: 'check', title: 'K99/R00', parentId: 'n1', addedBy: 'ai' });
+    const report = { type: 'ai.report' as const, noteId: 'n1', run, add: [found], checklist: [{ id: 'c1', text: 'Read the call', done: true }] };
+    const board = [report, report].reduce((b, op) => applyOp(b, op, later), boardWith(waiting));
+    const updated = board.notes.find(n => n.id === 'n1')!;
+    expect(updated.aiLog).toEqual([run]);
+    expect(updated.aiState).toBeUndefined();
+    expect(updated.checklist).toEqual(report.checklist);
+    expect(updated.links).toEqual([]);
+    expect(updated.updatedAt).toBe(later.toISOString());
+    expect(board.notes.filter(n => n.id === 'n2')).toEqual([found]);
+  });
+
+  it('keeps the last 10 runs, newest first', () => {
+    const old = Array.from({ length: 10 }, (_, i) => ({ ...run, id: `old${i}` }));
+    const board = applyOp(boardWith(note({ ai, aiLog: old })), { type: 'ai.report', noteId: 'n1', run, add: [] }, now);
+    expect(board.notes[0]!.aiLog!.map(r => r.id)).toEqual(['r1', ...old.slice(0, 9).map(r => r.id)]);
+  });
+
+  it('sets and clears what the AI is doing on several stickies', () => {
+    const state = { status: 'queued' as const, since: now.toISOString(), by: 'OpenClaw' };
+    const start = boardWith(note({ ai }), note({ id: 'n2', ai }), note({ id: 'n3' }));
+    const queued = applyOp(start, { type: 'ai.state', ids: ['n1', 'n2'], state }, now);
+    expect(queued.notes.map(n => n.aiState)).toEqual([state, state, undefined]);
+    const cleared = applyOp(queued, { type: 'ai.state', ids: ['n1'], state: null }, now);
+    expect(cleared.notes.map(n => n.aiState)).toEqual([undefined, state, undefined]);
+    expect(applyOp(cleared, { type: 'ai.state', ids: ['n1', 'n3'], state: null }, now)).toBe(cleared);
+  });
+
+  it('turns the AI connection on and changes its daily limit', () => {
+    const board = apply(makeEmptyBoard(), { type: 'settings.patch', patch: { ai: { connect: true } } });
+    expect(board.settings.ai).toEqual({ connect: true, dailyCap: 12 });
+  });
+});

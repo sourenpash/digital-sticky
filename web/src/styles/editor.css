@@ -3499,3 +3499,161 @@
   margin: 8px 0 0;
   padding-left: 20px;
 }
+
+/* Wall tab: the AI helper */
+.set-subhead {
+  margin: 6px 0 0;
+  font-size: 15px;
+}
+
+.ai-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.copy-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.copy-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.copy-head .btn {
+  flex: none;
+}
+
+.ai-links > .btn,
+.ai-editor > .btn {
+  align-self: flex-start;
+}
+
+.copy-text {
+  display: block;
+  min-width: 0;
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.copy-text.is-block {
+  max-height: 9.5em;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.ai-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding-left: 22px;
+  font-size: 14px;
+}
+
+.ai-steps li {
+  padding-left: 2px;
+}
+
+.ai-steps .copy-box {
+  margin-top: 6px;
+}
+
+.ai-warn {
+  display: inline;
+  color: var(--warn);
+}
+
+.ai-warn svg {
+  width: 16px;
+  height: 16px;
+  vertical-align: -3px;
+}
+
+.ai-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg);
+}
+
+.ai-editor-title {
+  margin: 0;
+  font-size: 15px;
+}
+
+.ai-editor select,
+.ai select {
+  min-height: 40px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.ai-kind-card .radio-card-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.ai-kind-card .radio-card-title svg {
+  width: 18px;
+  height: 18px;
+  color: var(--ai-mark);
+}
+
+.ai-conn-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  color: var(--ai-mark);
+}
+
+.screen-hint.is-warn,
+.ai-test-result.is-warn {
+  color: var(--warn);
+}
+
+.ai-test-result {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ai-test-result.is-ok {
+  color: var(--good);
+}
+
+.inline-icon {
+  width: 13px;
+  height: 13px;
+  vertical-align: -2px;
+}
+
+.ai-status a,
+.ai-conn .screen-hint a {
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
