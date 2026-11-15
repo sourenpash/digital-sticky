@@ -1,4 +1,4 @@
-# Shared by install.sh, update.sh, kiosk.sh and anywhere.sh (sourced, not run).
+# Shared by install.sh, update.sh, kiosk.sh, anywhere.sh and domain.sh (sourced, not run).
 # shellcheck disable=SC2034 # the variables are for the scripts that source this
 
 APP_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)

@@ -8,6 +8,13 @@ final class BoardAddressTests: XCTestCase {
         XCTAssertEqual(BoardAddress("http://10.0.0.182")?.base.absoluteString, "http://10.0.0.182")
     }
 
+    func testDomainsAreHttps() {
+        XCTAssertEqual(BoardAddress("sticky.example.com")?.base.absoluteString, "https://sticky.example.com")
+        XCTAssertEqual(BoardAddress("Sticky.Example.com/")?.base.absoluteString, "https://sticky.example.com")
+        XCTAssertEqual(BoardAddress("nuc")?.base.absoluteString, "http://nuc:3000")
+        XCTAssertEqual(BoardAddress("nuc.lan")?.base.absoluteString, "http://nuc.lan:3000")
+    }
+
     func testTailscaleNamesAreHttps() {
         XCTAssertEqual(BoardAddress("souren.tail1234.ts.net")?.base.absoluteString, "https://souren.tail1234.ts.net")
         XCTAssertEqual(BoardAddress("https://souren.tail1234.ts.net/")?.base.absoluteString, "https://souren.tail1234.ts.net")

@@ -50,7 +50,7 @@ struct CantReachView: View {
                     .foregroundStyle(.secondary)
                 Text(address.scheme == "https"
                     ? "Check the wall computer is on and connected. If From anywhere was turned off, scan the wall’s code again."
-                    : "This address only works on your home Wi-Fi. To use the board anywhere, run scripts/linux/anywhere.sh on the wall computer, then scan the wall’s code again.")
+                    : "This address only works on your home Wi-Fi. To use the board anywhere, run scripts/linux/domain.sh (your own domain) or anywhere.sh (Tailscale) on the wall computer, then scan the wall’s code again.")
                     .font(.callout)
                     .multilineTextAlignment(.center)
                     .padding(.top, 4)
@@ -104,7 +104,7 @@ struct AddressView: View {
             }
 
             Section {
-                TextField("10.0.0.182:3000 or name.ts.net", text: $typed)
+                TextField("sticky.example.com or 10.0.0.182:3000", text: $typed)
                     .keyboardType(.URL)
                     .textContentType(.URL)
                     .textInputAutocapitalization(.never)
@@ -126,7 +126,7 @@ struct AddressView: View {
             } header: {
                 Text("Or type the address")
             } footer: {
-                Text("It’s under the wall’s code. On your home Wi-Fi it’s the wall computer’s address and port, like 10.0.0.182:3000. From anywhere, it’s the board’s https address.")
+                Text("It’s under the wall’s code. With your own domain, it’s that name, like sticky.example.com. On your home Wi-Fi it’s the wall computer’s address and port, like 10.0.0.182:3000.")
             }
 
             if let problem {

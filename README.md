@@ -148,9 +148,18 @@ The wall's code then leads to the new address. It works at home too, so use it e
 
 **How it's kept safe.** The board takes requests from the internet on a separate port (`PUBLIC_PORT`, normally 3001) that only the NUC itself can reach, and Funnel delivers there. Everything arriving on that port counts as coming from outside, whatever it says about itself: it always has to sign in, and it never gets the wall computer's rights (no **Exit to desktop**, no sign-in codes from the wall). Without a PIN, anyone on your Wi-Fi can still open the board, and so could connect a device that works from anywhere; set a PIN if that's a worry.
 
-**Other ways, without Tailscale.** Point them at `http://127.0.0.1:3001` (the internet port, never 3000), and set `PUBLIC_URL` to your address:
+**At your own domain, instead.** If you have a domain, `scripts/linux/domain.sh sticky.example.com` puts the board at `https://sticky.example.com` with [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/), which is free. Nothing changes on your router either. The difference from Tailscale is that Cloudflare decrypts the traffic at its servers. The domain has to use Cloudflare for its DNS: add it on Cloudflare's free plan, then change its nameservers where you bought it (Cloudflare copies the records you have, but check your email ones came across). The script:
 
-- [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) with your own domain. No router change, but Cloudflare decrypts the traffic at its servers.
+1. installs `cloudflared` from Cloudflare's package site, if it's missing (this needs your password);
+2. signs in to Cloudflare: open the link it shows (also as a QR code) and pick the domain;
+3. makes a tunnel named `sticky-wall` and the DNS record for the name, leading to the board's internet port;
+4. runs the tunnel as the service `sticky-wall-tunnel`, which starts with the computer;
+5. saves the address in `.env` as `PUBLIC_URL`, restarts the board and checks that the address answers.
+
+Signing in works the same as with Tailscale. `--status` says whether it's on, and `--off` stops the tunnel and removes the address (the tunnel and DNS record stay in your Cloudflare account until you delete them).
+
+**Other ways.** Point them at `http://127.0.0.1:3001` (the internet port, never 3000), and set `PUBLIC_URL` to your address:
+
 - A port forward on your router to the NUC, with [Caddy](https://caddyserver.com) in front for automatic HTTPS. This needs a router change and an address of your own on the internet (it won't work behind carrier-grade NAT).
 
 ### Reminders on your phone (optional)

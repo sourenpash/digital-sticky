@@ -10,15 +10,15 @@ struct BoardAddress: Equatable {
     /// The board's own port, when an address is typed without one.
     static let defaultPort = 3000
 
-    /// Reads "10.0.0.182:3000", "souren.local", "https://souren.tail1234.ts.net", or the link
-    /// in the wall's code. Nil when it isn't an address.
+    /// Reads "10.0.0.182:3000", "souren.local", "sticky.example.com", "https://souren.tail1234.ts.net",
+    /// or the link in the wall's code. Nil when it isn't an address.
     init?(_ text: String) {
         var text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !text.contains(" ") else { return nil }
         let typedScheme = text.contains("://")
         if !typedScheme {
-            // Tailscale names are https; everything else on the home network is plain http.
-            text = (text.lowercased().contains(".ts.net") ? "https://" : "http://") + text
+            // Names on the internet (a domain, a Tailscale name) are https; the home network is plain http.
+            text = (Self.onHomeNetwork(text) ? "http://" : "https://") + text
         }
         guard var parts = URLComponents(string: text),
               let scheme = parts.scheme?.lowercased(), scheme == "http" || scheme == "https",
@@ -35,6 +35,15 @@ struct BoardAddress: Equatable {
         while parts.path.hasSuffix("/") { parts.path.removeLast() }
         guard let url = parts.url else { return nil }
         base = url
+    }
+
+    /// "10.0.0.182", "souren.local:3000", "nuc": an address only the home network knows.
+    private static func onHomeNetwork(_ typed: String) -> Bool {
+        let host = typed.lowercased().split(separator: "/").first.map(String.init) ?? ""
+        let name = host.hasPrefix("[") ? host : String(host.split(separator: ":").first ?? "")
+        if name.hasPrefix("[") || name.allSatisfy({ $0.isNumber || $0 == "." }) { return true } // an IP address
+        if !name.contains(".") { return true }
+        return [".local", ".lan", ".home", ".internal", ".home.arpa", ".localdomain"].contains { name.hasSuffix($0) }
     }
 
     /// The page to open: the board, at `route` (like "#note-abc") if given.

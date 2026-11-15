@@ -30,7 +30,7 @@ You need a Mac with Xcode 16 or newer, and the iPhone on iOS 16 or newer.
 
 ## Using it away from home
 
-The app opens whatever address the wall's code has. At home that's the wall computer's Wi-Fi address (like `http://10.0.0.182:3000`), which only works on your Wi-Fi. To use it anywhere, turn on [From anywhere](../README.md#from-anywhere-optional) on the wall computer (`scripts/linux/anywhere.sh`), then in the app scan the wall's code again: it now holds the board's `https://….ts.net` address, which works at home and away. To change it later: Wall → Notifications → **Change**, or **Change the address** when the board can't be reached.
+The app opens whatever address the wall's code has. At home that's the wall computer's Wi-Fi address (like `http://10.0.0.182:3000`), which only works on your Wi-Fi. To use it anywhere, give the board an internet address on the wall computer: your own domain with `scripts/linux/domain.sh sticky.example.com`, or Tailscale with `scripts/linux/anywhere.sh` (see [From anywhere](../README.md#from-anywhere-optional)). Then scan the wall's code again in the app. It now holds that `https://` address, which works at home and away. To change it later: Wall → Notifications → **Change**, or **Change the address** when the board can't be reached.
 
 ## Changing the app
 
