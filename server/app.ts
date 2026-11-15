@@ -7,7 +7,7 @@ import { compress } from 'hono/compress';
 import { secureHeaders } from 'hono/secure-headers';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import type { AiOverview, AnywhereStatus, PairCode, ScreenInfo, SessionResponse, StateResponse, WallCode } from '../shared/api.ts';
+import type { AiOverview, AnywhereStatus, PairCode, ScreenInfo, SessionResponse, StateResponse, UpcomingResponse, WallCode } from '../shared/api.ts';
 import {
   aiConnectionInputSchema,
   completionsChangeSchema,
@@ -25,6 +25,7 @@ import {
   screenNameSchema,
   settingsPatchSchema,
 } from '../shared/schema.ts';
+import { upcomingNotices } from '../shared/notify.ts';
 import type { RemoteStatus } from '../shared/remote.ts';
 import type { Goal, Lane, Note } from '../shared/types.ts';
 import type { AiRunner } from './ai.ts';
@@ -340,6 +341,13 @@ export function createApp({
     c.header('Cache-Control', 'no-store');
     const { epoch, rev, board } = store.snapshot();
     return c.json({ epoch, rev, board, connectUrl: valueOf(connectUrl) } satisfies StateResponse);
+  });
+
+  // What the iPhone app sets as notifications on the phone, so they go off even offline.
+  api.get('/upcoming', c => {
+    c.header('Cache-Control', 'no-store');
+    const now = store.now();
+    return c.json({ now: now.toISOString(), notices: upcomingNotices(store.board, now) } satisfies UpcomingResponse);
   });
 
   // The AI helper: the board's MCP links and the AIs it wakes up (their tokens never come back).

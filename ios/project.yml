@@ -1,0 +1,83 @@
+# The iPhone app's Xcode project, for XcodeGen (https://github.com/yonaskolb/XcodeGen).
+# DigitalSticky.xcodeproj is made from this file: after changing it (or adding a Swift
+# file), run `xcodegen` in this folder. See README.md here.
+name: DigitalSticky
+options:
+  bundleIdPrefix: com.sourenpash
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    # Your Apple ID's team: set it here, or pick it in Xcode under Signing & Capabilities.
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+targets:
+  DigitalSticky:
+    type: application
+    platform: iOS
+    sources:
+      - DigitalSticky
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sourenpash.digitalsticky
+        PRODUCT_NAME: DigitalSticky
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_PREVIEWS: YES
+    info:
+      path: DigitalSticky/Info.plist
+      properties:
+        CFBundleDisplayName: Sticky
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSCameraUsageDescription: The camera scans the code on your wall, to sign this phone in to your board.
+        NSLocalNetworkUsageDescription: Your board runs on a computer at home; the app opens it over your Wi-Fi.
+        # Your own board, at an address you choose: at home that's plain http (like
+        # http://10.0.0.182:3000), so the app may open any address.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        # Checking for new reminders now and then, while the app isn't open.
+        UIBackgroundModes:
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - $(PRODUCT_BUNDLE_IDENTIFIER).refresh
+  DigitalStickyTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - DigitalStickyTests
+    dependencies:
+      - target: DigitalSticky
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sourenpash.digitalsticky.tests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  DigitalSticky:
+    build:
+      targets:
+        DigitalSticky: all
+        DigitalStickyTests: [test]
+    test:
+      targets:
+        - DigitalStickyTests

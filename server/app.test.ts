@@ -54,6 +54,16 @@ describe('API', () => {
     expect(await (await app.request('/api/health')).json()).toEqual({ ok: true, rev: 0, buildId: 'test-build' });
   });
 
+  it('lists the reminders coming up, for the iPhone app', async () => {
+    const at = new Date(store.now().getTime() + 3_600_000).toISOString();
+    await addNote({ title: 'Pay rent', remindAt: at });
+    await addNote({ title: 'No reminder' });
+    const body = (await (await app.request('/api/upcoming')).json()) as { notices: { body: string; at: string; url: string }[] };
+    expect(body.notices).toHaveLength(1);
+    expect(body.notices[0]).toMatchObject({ body: 'Pay rent', at });
+    expect(body.notices[0]!.url).toMatch(/^#note-/);
+  });
+
   it('adds a note from just a column and a title', async () => {
     const note = await addNote();
     expect(note).toMatchObject({ laneId: 'todo', title: 'Buy stamps', body: '', checklist: [], pinned: false, done: false });

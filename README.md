@@ -11,6 +11,7 @@ A sticky-note wall for a bedroom monitor. It shows colored squares for applicati
 - **Not tried for real yet.** No AI was asked to do anything, and no notification or text was sent: stand-ins played Claude, the push services and BlueBubbles in every test. The first real run is yours to start, from the Wall tab.
 - **Screen saver, so the TV doesn't burn in.** It shows the time for a few seconds, then goes black: all night while you sleep (1 AM to 9 AM), and for 5 minutes every hour during the day. Moving the mouse brings the board back. Change it under Wall → Screen saver.
 - **Click a sticky on the wall** with the wall computer's mouse to open it right there. **Back to the wall** returns, and so does leaving it alone for 2 minutes.
+- **An iPhone app** (in [`ios/`](ios/README.md), built with Xcode on a Mac). Scan the wall's code to set it up. It opens the board, and sets its reminders as notifications on the phone ahead of time, so they come even with no connection. Not tried on an iPhone yet: it was written on the wall computer, which can't build iPhone apps.
 
 | Checkpoint | What it adds | Status |
 | --- | --- | --- |
@@ -154,9 +155,11 @@ The wall's code then leads to the new address. It works at home too, so use it e
 
 ### Reminders on your phone (optional)
 
-Reminders and nudges to follow up pop up on the wall at their time. They can reach you away from it too, with the same words, in two ways. Both stay quiet while the wall is in night mode (Wall → Notifications → **Quiet during night mode** turns that off).
+Reminders and nudges to follow up pop up on the wall at their time. They can reach you away from it too, with the same words, in three ways. Both stay quiet while the wall is in night mode (Wall → Notifications → **Quiet during night mode** turns that off).
 
-**Notifications on your iPhone** (no Mac needed). An iPhone gets notifications from websites added to its Home Screen (iOS 16.4 or newer), opened at an `https://` address, so set up [From anywhere](#from-anywhere-optional) first. Then, on the iPhone:
+**The iPhone app** (needs a Mac with Xcode). The app in [`ios/`](ios/README.md) opens the board and sets its reminders as notifications on the phone ahead of time, so they come even with no connection, at the Wi-Fi address too. You set it up by scanning the wall's code. [ios/README.md](ios/README.md) says how to put it on your iPhone.
+
+**Notifications on your iPhone, without the app** (no Mac needed). An iPhone gets notifications from websites added to its Home Screen (iOS 16.4 or newer), opened at an `https://` address, so set up [From anywhere](#from-anywhere-optional) first. Then, on the iPhone:
 
 1. open the board's `https://` address in Safari, tap Share, then **Add to Home Screen**;
 2. open the board from the Home Screen, go to Wall → **Notifications**, and tap **Turn on notifications on this phone**;
@@ -371,6 +374,7 @@ The API, for scripts (AIs use the MCP server instead):
 | `POST /api/ai/mcp/rotate` | A new secret for the AIs' link (the old link stops working) |
 | `POST /mcp/<secret>` | The MCP server (Streamable HTTP), only while the AI connection is on. Tools: `list_ai_tasks`, `get_sticky`, `list_stickies` and `report_ai_run` |
 | `GET /api/push`, `POST /api/push/devices`, `DELETE /api/push/devices/:id`, `POST /api/push/devices/:id/test` | Notifications: the board's public key and the devices that get them, turning them on for a device (`{"subscription": …, "name": "iPhone"}`, the browser's push subscription), stopping them, and a test |
+| `GET /api/upcoming` | The reminders and follow-up nudges of the next 14 days (none in night mode while that's quiet), for the iPhone app to set as notifications: `{"notices": [{"title", "body", "url", "tag", "at"}]}` |
 | `GET`/`PUT /api/imessage`, `POST /api/imessage/test` | Texts: the settings (the password never comes back; leave it out to keep the saved one), and a test text |
 | `POST /hooks/imessage/<secret>` | Where BlueBubbles posts new messages |
 | `GET /api/export` | Download everything, trash included |

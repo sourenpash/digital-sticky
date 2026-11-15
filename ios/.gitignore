@@ -1,0 +1,7 @@
+xcuserdata/
+*.xcuserstate
+build/
+DerivedData/
+# Made by `xcodegen` from project.yml.
+DigitalSticky.xcodeproj/
+DigitalSticky/Info.plist

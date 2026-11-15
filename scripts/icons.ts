@@ -1,4 +1,4 @@
-// Renders the Home Screen icons (PNG) into web/public: `node scripts/icons.ts`.
+// Renders the Home Screen icons (PNG) into web/public, and the iPhone app's: `node scripts/icons.ts`.
 // Same design as favicon.svg, but square and opaque to the edges: iPhones round the
 // corners themselves and would show transparent corners as black.
 import { writeFile } from 'node:fs/promises';
@@ -14,6 +14,7 @@ const SIZES: Array<[file: string, size: number]> = [
   ['web/public/apple-touch-icon.png', 180],
   ['web/public/icon-192.png', 192],
   ['web/public/icon-512.png', 512],
+  ['ios/DigitalSticky/Assets.xcassets/AppIcon.appiconset/AppIcon.png', 1024],
 ];
 
 const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM ?? '/opt/pw-browsers/chromium' });

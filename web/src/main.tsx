@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
+import { tellAppAboutChanges } from './lib/nativeApp.ts';
 import { currentToken, navigate, startToken } from './lib/route.ts';
 import { applyPresetsFromUrl } from './proto/presets.ts';
 import { engine } from './store/board.ts';
@@ -27,6 +28,7 @@ else {
   });
   openWallOnWallScreens();
   listenForNotificationTaps(hash => navigate(hash));
+  tellAppAboutChanges(engine.subscribe);
 }
 
 /**

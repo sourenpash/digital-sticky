@@ -4,6 +4,7 @@ import { BellRing, MessageSquareText, Plus, Send, Trash2, X } from 'lucide-react
 import { whenLabel } from '../../../shared/ai.ts';
 import type { IMessageInfo, PushDeviceInfo } from '../../../shared/api.ts';
 import type { Board } from '../../../shared/types.ts';
+import { tellApp, useNativeApp, type NativeAppState } from '../lib/nativeApp.ts';
 import { useAnywhere } from '../store/anywhere.ts';
 import { board as store } from '../store/board.ts';
 import { pushSupport, testNotification, thisDevice, turnOffNotifications, turnOnNotifications, usePush, useThisDevice } from '../store/push.ts';
@@ -68,6 +69,44 @@ function DeviceRow({ device, here, now }: { device: PushDeviceInfo; here: boolea
   );
 }
 
+/** In the iPhone app: it sets the reminders on the phone itself, so they come even with no connection. */
+function AppNotifications({ app }: { app: NativeAppState }) {
+  return (
+    <>
+      {app.notifications === 'on' && (
+        <p className="set-note">
+          This phone gets notifications. They’re set ahead of time, so they come even with no connection
+          {app.scheduled > 0 ? ` (${app.scheduled} set now)` : ''}.
+        </p>
+      )}
+      {app.notifications === 'unknown' && (
+        <button type="button" className="btn btn-sm btn-primary" onClick={() => tellApp({ type: 'enableNotifications' })}>
+          <BellRing aria-hidden="true" /> Turn on notifications on this phone
+        </button>
+      )}
+      {app.notifications === 'denied' && (
+        <>
+          <p className="set-note">Notifications are off for this app in the iPhone’s Settings. Turn them on there, under Notifications.</p>
+          <button type="button" className="btn btn-sm btn-primary" onClick={() => tellApp({ type: 'openPhoneSettings' })}>
+            Open Settings
+          </button>
+        </>
+      )}
+      {app.notifications === 'on' && (
+        <button type="button" className="btn btn-sm" onClick={() => tellApp({ type: 'testNotification' })}>
+          <Send aria-hidden="true" /> Send a test
+        </button>
+      )}
+      <p className="set-note">
+        The app opens <strong>{app.address.replace(/^https?:\/\//, '')}</strong>.{' '}
+        <button type="button" className="link-btn" aria-label="Change the board’s address in the app" onClick={() => tellApp({ type: 'changeAddress' })}>
+          Change
+        </button>
+      </p>
+    </>
+  );
+}
+
 /** Notifications on this phone or computer, and the other devices that get them. */
 export function NotificationsSection({ board, now }: { board: Board; now: Date }) {
   const push = usePush();
@@ -75,7 +114,8 @@ export function NotificationsSection({ board, now }: { board: Board; now: Date }
   const anywhere = useAnywhere()?.url ?? null;
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const support = pushSupport();
+  const app = useNativeApp();
+  const support = app ? 'app' : pushSupport();
   const devices = push?.devices ?? [];
   const here = thisDevice(devices, endpoint);
   const deviceWord = /iPhone|Android.+Mobile/.test(navigator.userAgent) ? 'phone' : 'device';
@@ -95,6 +135,7 @@ export function NotificationsSection({ board, now }: { board: Board; now: Date }
         <BellRing aria-hidden="true" /> Notifications
       </h3>
       <p className="set-note">Reminders and follow-up nudges show up on your phone too, with the same words as the wall. A tap opens the sticky.</p>
+      {app && <AppNotifications app={app} />}
       {support === 'needs-https' && (
         <p className="set-note">
           Notifications need the board’s https address.{' '}

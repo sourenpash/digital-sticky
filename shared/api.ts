@@ -1,4 +1,5 @@
 import type { AiConnectionKind } from './ai.ts';
+import type { UpcomingNotice } from './notify.ts';
 import type { Op } from './ops.ts';
 import type { Board } from './types.ts';
 
@@ -14,6 +15,12 @@ export interface StateResponse {
   board: Board;
   /** Address phones can open, for the "Connect your phone" code. */
   connectUrl: string | null;
+}
+
+/** GET api/upcoming: the reminders coming up, for the iPhone app to set on the phone. */
+export interface UpcomingResponse {
+  now: string;
+  notices: UpcomingNotice[];
 }
 
 /** Every change answers with the revision that includes it. */
