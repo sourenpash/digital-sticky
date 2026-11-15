@@ -218,8 +218,21 @@ export interface NotifySettings {
   quietAtNight: boolean;
 }
 
+/** The screen saver, so the TV doesn't burn in: a short clock, then a black screen. */
+export interface SaverSettings {
+  /** A break every this many minutes, on the hour and after (0: no breaks). */
+  every: number;
+  /** How long each break lasts, in minutes. */
+  length: number;
+  /** On all through these hours (while you sleep), `HH:mm`. */
+  sleep: boolean;
+  sleepStart: string;
+  sleepEnd: string;
+}
+
 export interface Settings {
   night: { mode: NightMode; start: string; end: string; style: NightStyle };
+  saver: SaverSettings;
   wall: { showConnect: boolean; chime: boolean; alertMinutes: number };
   ticker: TickerSettings;
   ai: AiSettings;

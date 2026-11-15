@@ -346,6 +346,7 @@ export function makeSampleBoard(now: Date): Board {
       // The sample starts in day mode so it looks the same at any hour; a real board
       // defaults to 'auto' (10 PM–7 AM).
       night: { mode: 'off', start: '22:00', end: '07:00', style: 'dim' },
+      saver: structuredClone(DEFAULT_SETTINGS.saver),
       wall: { showConnect: false, chime: true, alertMinutes: 60 },
       ticker: structuredClone(DEFAULT_SETTINGS.ticker),
       ai: { connect: true, dailyCap: 12 },

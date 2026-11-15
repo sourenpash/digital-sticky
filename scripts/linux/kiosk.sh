@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Shows the wall screen full screen in Chrome or Chromium, and brings it back if the
-# browser closes or crashes. install.sh starts it whenever you log in.
+# browser crashes. Closing its window leaves it closed. install.sh starts it whenever you log in.
 #
 #   scripts/linux/kiosk.sh          start the wall screen now (from a terminal, it carries on
 #                                   after the terminal closes)
@@ -111,7 +111,7 @@ browser_running() {
   local target pid
   target=$(readlink "$PROFILE/SingletonLock" 2>/dev/null) || return 1
   pid=${target##*-}
-  if [[ $pid =~ ^[0-9]+$ ]] && tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null | grep -qF -- "--user-data-dir=$PROFILE"; then
+  if [[ $pid =~ ^[0-9]+$ ]] && tr '\0' ' ' 2>/dev/null <"/proc/$pid/cmdline" | grep -qF -- "--user-data-dir=$PROFILE"; then
     return 0
   fi
   rm -f "$PROFILE/SingletonLock" "$PROFILE/SingletonSocket" "$PROFILE/SingletonCookie"
@@ -162,6 +162,13 @@ while true; do
   wait "$child"
   code=$?
   child=''
+  # Closed on purpose (the window's close button, Alt+F4, Ctrl+Shift+Q): the browser exits
+  # cleanly, so leave the desktop showing. Only a crash (or the daily restart) reopens it.
+  if [ "$code" = 0 ] && [ "${daily:-0}" != 1 ]; then
+    rm -f "$PID_FILE"
+    log "The wall screen was closed. It comes back with the Sticky Wall icon, or at the next login."
+    exit 0
+  fi
   # A browser that keeps closing right away is retried more and more slowly (up to a minute).
   if [ "${daily:-0}" = 1 ]; then
     daily=0

@@ -52,9 +52,57 @@
   transition: transform 2s ease-in-out;
 }
 
-/* The pointer only shows while the mouse is in use. */
-.wall-standalone:not(.is-pointer) .wall {
+/* The pointer only shows while the mouse is in use (stickies you can click included). */
+.wall-standalone:not(.is-pointer) .wall,
+.wall-standalone:not(.is-pointer) .wall * {
   cursor: none;
+}
+
+/* The screen saver: the time for a few seconds, somewhere new each time, then black. */
+.screen-saver {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #000;
+  cursor: none;
+}
+
+.saver-clock {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.2vw;
+  color: #8c8173;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition: opacity 1.5s ease;
+}
+
+.saver-clock.is-shown {
+  opacity: 1;
+}
+
+.saver-time {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6vw;
+  line-height: 0.9;
+  font-variant-numeric: tabular-nums;
+}
+
+.saver-time .clock-hm {
+  font-size: 9vw;
+  font-weight: 500;
+}
+
+.saver-time .clock-ampm {
+  color: #6d6457;
+  font-size: 2vw;
+}
+
+.saver-date {
+  font-size: 1.5vw;
 }
 
 /* "Exit to desktop" (the wall computer only), up while the mouse is in use. */

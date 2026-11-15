@@ -8,6 +8,7 @@ import {
   Download,
   Lock,
   Monitor,
+  MonitorOff,
   Moon,
   MousePointer2,
   Plus,
@@ -47,6 +48,20 @@ const STAY_UP = [
 const NIGHT_STYLES: Array<{ value: NightStyle; label: string; hint: string }> = [
   { value: 'dim', label: 'Dim the board', hint: 'Everything stays, much darker' },
   { value: 'clock', label: 'Clock only', hint: 'Just the time and next deadline' },
+];
+
+/** How often the screen saver gives the TV a break (0: never). */
+const SAVER_EVERY = [
+  { minutes: 0, label: 'Never' },
+  { minutes: 30, label: '30 min' },
+  { minutes: 60, label: '1 hour' },
+  { minutes: 120, label: '2 hours' },
+];
+
+const SAVER_LENGTH = [
+  { minutes: 2, label: '2 min' },
+  { minutes: 5, label: '5 min' },
+  { minutes: 10, label: '10 min' },
 ];
 
 /** What a new column is for, in the words the Add menu uses. */
@@ -352,6 +367,8 @@ export function DisplayTab({ board, now, desktop, go }: { board: Board; now: Dat
   const { connectUrl } = useSync();
   const setNight = (patch: Partial<Settings['night']>) => store.updateSettings(s => ({ ...s, night: { ...s.night, ...patch } }));
   const setWall = (patch: Partial<Settings['wall']>) => store.updateSettings(s => ({ ...s, wall: { ...s.wall, ...patch } }));
+  const { saver } = board.settings;
+  const setSaver = (patch: Partial<Settings['saver']>) => store.updateSettings(s => ({ ...s, saver: { ...s.saver, ...patch } }));
   const nextReminder = board.notes.find(n => n.remindAt && !n.done && !board.alerts.some(a => a.noteId === n.id));
 
   return (
@@ -395,6 +412,45 @@ export function DisplayTab({ board, now, desktop, go }: { board: Board; now: Dat
               </button>
             ))}
           </div>
+        </section>
+
+        <section className="set-group">
+          <h3>
+            <MonitorOff aria-hidden="true" /> Screen saver
+          </h3>
+          <p className="set-note">So the TV doesn’t burn in: the time for a few seconds, then a black screen. Moving the wall’s mouse (or the phone remote) brings the board back for 2 minutes.</p>
+          <Switch id="saver-sleep" checked={saver.sleep} label="On while you sleep" onChange={sleep => setSaver({ sleep })} />
+          {saver.sleep && (
+            <div className="set-row time-range">
+              <label htmlFor="saver-start">From</label>
+              <input id="saver-start" type="time" value={saver.sleepStart} onChange={e => e.target.value && setSaver({ sleepStart: e.target.value })} />
+              <label htmlFor="saver-end">to</label>
+              <input id="saver-end" type="time" value={saver.sleepEnd} onChange={e => e.target.value && setSaver({ sleepEnd: e.target.value })} />
+            </div>
+          )}
+          <div className="sym-field">
+            <span className="field-label" id="saver-every">During the day, a break every</span>
+            <div className="seg-group" role="radiogroup" aria-labelledby="saver-every">
+              {SAVER_EVERY.map(option => (
+                <button key={option.minutes} type="button" role="radio" aria-checked={saver.every === option.minutes} className={`seg${saver.every === option.minutes ? ' is-on' : ''}`} onClick={() => setSaver({ every: option.minutes })}>
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {saver.every > 0 && (
+            <div className="sym-field">
+              <span className="field-label" id="saver-length">Each break lasts</span>
+              <div className="seg-group" role="radiogroup" aria-labelledby="saver-length">
+                {SAVER_LENGTH.map(option => (
+                  <button key={option.minutes} type="button" role="radio" aria-checked={saver.length === option.minutes} className={`seg${saver.length === option.minutes ? ' is-on' : ''}`} onClick={() => setSaver({ length: option.minutes })}>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {saver.every > 0 && <p className="set-note">Breaks start on the hour, and wait while a reminder is up.</p>}
         </section>
 
         <section className="set-group">

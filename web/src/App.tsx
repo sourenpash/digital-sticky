@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Volume2 } from 'lucide-react';
+import { Monitor, Volume2 } from 'lucide-react';
 import { SAMPLE_PAIR_CODE } from '../../shared/sample.ts';
 import type { Board } from '../../shared/types.ts';
 import { EditorApp } from './editor/EditorApp.tsx';
@@ -17,11 +17,56 @@ import type { SyncStatus } from './store/sync.ts';
 import { useSoundBlocked } from './wall/chime.ts';
 import { CAN_EXIT_TO_DESKTOP, EditTheBoard, ExitToDesktop } from './wall/ExitToDesktop.tsx';
 import { wallMode } from './wall/night.ts';
+import { ScreenSaver } from './wall/ScreenSaver.tsx';
 import { Wall } from './wall/Wall.tsx';
-import { useBurnInDrift, useCheckIn, useLongOffline, useMouseInUse, useWakeLock, useWallCode } from './wall/standalone.ts';
+import { saverDue } from './wall/saver.ts';
+import { useBurnInDrift, useCheckIn, useLongOffline, useMouseInUse, useRecentlyUsed, useWakeLock, useWallCode } from './wall/standalone.ts';
 
 /** "Tap" on touch screens, "Click" with a mouse. */
 const TAP = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches ? 'Tap' : 'Click';
+
+/** Set while a note clicked on the wall is open, so the editor offers the way back (and goes back by itself). */
+const FROM_WALL = 'sticky-wall-opened';
+
+function fromWall(): boolean {
+  try {
+    return sessionStorage.getItem(FROM_WALL) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** On the wall computer, clicking a sticky opens it to edit right there. */
+function openFromWall(noteId: string): void {
+  try {
+    sessionStorage.setItem(FROM_WALL, '1');
+  } catch {
+    // Without storage there's no Back button, but the phone remote's Board button still works.
+  }
+  navigate(`note-${noteId}`);
+}
+
+function backToWall(): void {
+  try {
+    sessionStorage.removeItem(FROM_WALL);
+  } catch {
+    // Nothing to clear.
+  }
+  navigate('wall');
+}
+
+/** Over the editor after a note was opened from the wall: a button back, and back by itself when nobody's using it. */
+function BackToWall() {
+  const used = useRecentlyUsed(2 * 60_000, true);
+  useEffect(() => {
+    if (!used) backToWall();
+  }, [used]);
+  return (
+    <button type="button" className="btn btn-primary back-to-wall" onClick={backToWall}>
+      <Monitor aria-hidden="true" /> Back to the wall
+    </button>
+  );
+}
 
 function defaultRoute(): Route {
   // The preview page opens the side-by-side demo on wide screens; the real app opens
@@ -34,6 +79,8 @@ function defaultRoute(): Route {
  * drifting a little, and honest about the connection. The pointer shows while the mouse
  * is in use (or after a tap), with a way out: to the desktop on the wall computer, to
  * editing the board everywhere else.
+ * The screen saver comes on at its times unless someone's using the wall (and for the
+ * regular breaks, unless a reminder is up).
  */
 function WallScreen({ board, now, connectUrl, status }: { board: Board; now: Date; connectUrl: string | null; status: SyncStatus }) {
   useWakeLock();
@@ -47,21 +94,29 @@ function WallScreen({ board, now, connectUrl, status }: { board: Board; now: Dat
   const isWall = !!session && (session.wallComputer || session.wallScreen);
   const code = useWallCode(isWall && !session.outside && board.settings.wall.showConnect);
   useCheckIn(isWall);
+  const used = useRecentlyUsed();
+  const due = saverDue(board.settings.saver, now);
+  const saver = !used && (due === 'sleep' || (due === 'break' && board.alerts.length === 0));
+  // On the wall computer, a sticky clicked with its mouse opens to edit right there.
+  const open = CAN_EXIT_TO_DESKTOP && session?.wallComputer ? openFromWall : undefined;
   const soundBlocked = useSoundBlocked(board.settings.wall.chime && wallMode(board.settings, now) === 'day');
   return (
-    <div className={`wall-standalone${pointer ? ' is-pointer' : ''}`} style={{ transform: `translate(${x}px, ${y}px)` }}>
-      <Wall board={board} now={now} connectUrl={connectUrl} pairCode={__DEMO_BUILD__ ? SAMPLE_PAIR_CODE : code} sound offline={offline} />
-      {CAN_EXIT_TO_DESKTOP && session?.wallComputer ? (
-        <ExitToDesktop shown={pointer} onHover={setOnButton} />
-      ) : (
-        <EditTheBoard shown={pointer} onHover={setOnButton} />
-      )}
-      {soundBlocked && (
-        <p className="wall-sound-hint">
-          <Volume2 aria-hidden="true" /> {TAP} anywhere to turn on sounds
-        </p>
-      )}
-    </div>
+    <>
+      <div className={`wall-standalone${pointer ? ' is-pointer' : ''}`} style={{ transform: `translate(${x}px, ${y}px)` }}>
+        <Wall board={board} now={now} connectUrl={connectUrl} pairCode={__DEMO_BUILD__ ? SAMPLE_PAIR_CODE : code} sound offline={offline} onOpen={open} />
+        {CAN_EXIT_TO_DESKTOP && session?.wallComputer ? (
+          <ExitToDesktop shown={pointer} onHover={setOnButton} />
+        ) : (
+          <EditTheBoard shown={pointer} onHover={setOnButton} />
+        )}
+        {soundBlocked && (
+          <p className="wall-sound-hint">
+            <Volume2 aria-hidden="true" /> {TAP} anywhere to turn on sounds
+          </p>
+        )}
+      </div>
+      {saver && <ScreenSaver now={now} />}
+    </>
   );
 }
 
@@ -117,7 +172,12 @@ export function App() {
         screen = <RemoteScreen go={navigate} />;
         break;
       default:
-        screen = <EditorApp route={route} go={navigate} />;
+        screen = (
+          <>
+            <EditorApp route={route} go={navigate} />
+            {CAN_EXIT_TO_DESKTOP && fromWall() && <BackToWall />}
+          </>
+        );
     }
   }
 

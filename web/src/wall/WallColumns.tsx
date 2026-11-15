@@ -20,7 +20,7 @@ function useSize<T extends HTMLElement>() {
   return { ref, size };
 }
 
-export function WallColumns({ lanes, notes, now, u }: { lanes: Lane[]; notes: Note[]; now: Date; u: number }) {
+export function WallColumns({ lanes, notes, now, u, onOpen }: { lanes: Lane[]; notes: Note[]; now: Date; u: number; onOpen?: (noteId: string) => void }) {
   const ordered = lanesInOrder(lanes);
   const columns = ordered.map(lane => ({
     lane,
@@ -66,7 +66,7 @@ export function WallColumns({ lanes, notes, now, u }: { lanes: Lane[]; notes: No
                     style={{ gridTemplateColumns: `repeat(${fit.cols}, ${layout.size}px)`, gridAutoRows: `${layout.size}px` }}
                   >
                     {laneNotes.slice(0, fit.shown).map(note => (
-                      <StickyNote key={note.id} note={note} lane={lane} now={now} size={layout.size} compact={compact} links={links.get(note.id)} />
+                      <StickyNote key={note.id} note={note} lane={lane} now={now} size={layout.size} compact={compact} links={links.get(note.id)} onOpen={onOpen && (() => onOpen(note.id))} />
                     ))}
                     {fit.overflow > 0 && (
                       <div className="note-more" style={{ '--s': `${layout.size}px` } as CSSProperties}>

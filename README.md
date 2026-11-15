@@ -9,6 +9,8 @@ A sticky-note wall for a bedroom monitor. It shows colored squares for applicati
 - **Any AI can do the stickies you hand it** (checkpoint 8). The board has its own [MCP](https://modelcontextprotocol.io) server, the common way AIs connect to tools. A Claude routine, Claude Code, Claude Desktop, OpenClaw or any other AI that speaks MCP connects with the board's link, does the stickies handed to it, and reports back on each one. The board wakes the AI when something's due. See [The AI helper](#the-ai-helper-optional).
 - **Reminders on your phone** (checkpoint 9). Reminders and follow-up nudges show up as notifications on your iPhone (from the board on your Home Screen), and can come as iMessages through a Mac. Text the board back: **done**, **snooze 1h**, **add call NSF friday**, **today**. See [Reminders on your phone](#reminders-on-your-phone-optional).
 - **Not tried for real yet.** No AI was asked to do anything, and no notification or text was sent: stand-ins played Claude, the push services and BlueBubbles in every test. The first real run is yours to start, from the Wall tab.
+- **Screen saver, so the TV doesn't burn in.** It shows the time for a few seconds, then goes black: all night while you sleep (1 AM to 9 AM), and for 5 minutes every hour during the day. Moving the mouse brings the board back. Change it under Wall → Screen saver.
+- **Click a sticky on the wall** with the wall computer's mouse to open it right there. **Back to the wall** returns, and so does leaving it alone for 2 minutes.
 
 | Checkpoint | What it adds | Status |
 | --- | --- | --- |
@@ -60,7 +62,7 @@ Then do the one step the installer can't: turn on **automatic login** (Settings 
 
 It's safe to run the installer again at any time; that's also how to repair the setup.
 
-The wall looks after itself. If the browser closes or crashes, it opens again. If the wall's page crashes, or can't load because the board was restarting, it's loaded again within seconds. The browser also restarts once a night, at 4 AM, so it doesn't slowly use up memory.
+The wall looks after itself. If the browser crashes, it opens again (closing its window on purpose leaves it closed). If the wall's page crashes, or can't load because the board was restarting, it's loaded again within seconds. The browser also restarts once a night, at 4 AM, so it doesn't slowly use up memory.
 
 ### Connect your phone
 

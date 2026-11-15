@@ -227,6 +227,14 @@ const aiSettingsSchema = z.object({
 
 const notifySettingsSchema = z.object({ quietAtNight: z.boolean() });
 
+const saverSchema = z.object({
+  every: z.number().int().min(0).max(24 * 60),
+  length: z.number().int().min(1).max(120),
+  sleep: z.boolean(),
+  sleepStart: clock,
+  sleepEnd: clock,
+});
+
 export const settingsSchema = z.object({
   night: z.object({
     mode: z.enum(NIGHT_MODES),
@@ -243,6 +251,8 @@ export const settingsSchema = z.object({
   ticker: tickerSchema.default(() => structuredClone(DEFAULT_SETTINGS.ticker)),
   ai: aiSettingsSchema.default(() => structuredClone(DEFAULT_SETTINGS.ai)),
   notify: notifySettingsSchema.default(() => structuredClone(DEFAULT_SETTINGS.notify)),
+  // Boards saved before the screen saver existed get the default one.
+  saver: saverSchema.default(() => structuredClone(DEFAULT_SETTINGS.saver)),
 });
 
 export const settingsPatchSchema = z.object({
@@ -251,6 +261,7 @@ export const settingsPatchSchema = z.object({
   ticker: tickerSchema.partial().optional(),
   ai: aiSettingsSchema.partial().optional(),
   notify: notifySettingsSchema.partial().optional(),
+  saver: saverSchema.partial().optional(),
 });
 
 /** Most reminders that can be showing at once. */

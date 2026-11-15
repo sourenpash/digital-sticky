@@ -35,9 +35,11 @@ interface WallProps {
   cursor?: boolean;
   /** The board has been out of reach for a while. */
   offline?: boolean;
+  /** Clicking a sticky opens it (on the wall computer itself). */
+  onOpen?: (noteId: string) => void;
 }
 
-export function Wall({ board, now, connectUrl, pairCode = null, sound = false, cursor = false, offline = false }: WallProps) {
+export function Wall({ board, now, connectUrl, pairCode = null, sound = false, cursor = false, offline = false, onOpen }: WallProps) {
   const frameRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<Box | null>(null);
   const mode = wallMode(board.settings, now);
@@ -85,7 +87,7 @@ export function Wall({ board, now, connectUrl, pairCode = null, sound = false, c
             <>
               <WallHeader goals={board.goals} notes={board.notes} now={now} />
               <div className="wall-main">
-                <WallColumns lanes={board.lanes} notes={board.notes} now={now} u={box.u} />
+                <WallColumns lanes={board.lanes} notes={board.notes} now={now} u={box.u} onOpen={onOpen} />
                 <aside className="wall-side">
                   <UpcomingList notes={board.notes} now={now} max={connect ? 5 : 10} />
                   {connect && <ConnectCard url={connect} code={pairCode} />}

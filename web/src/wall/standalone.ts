@@ -69,6 +69,30 @@ export function useMouseInUse(idleMs = 3000): boolean {
   return inUse;
 }
 
+/**
+ * True while someone is using the wall (the mouse, the keyboard or the phone remote,
+ * whose moves reach the page too), and for `forMs` after, so the screen saver waits.
+ */
+export function useRecentlyUsed(forMs = 2 * 60_000, initially = false): boolean {
+  const [used, setUsed] = useState(initially);
+  useEffect(() => {
+    let idle = 0;
+    const onUse = () => {
+      setUsed(true);
+      window.clearTimeout(idle);
+      idle = window.setTimeout(() => setUsed(false), forMs);
+    };
+    if (initially) onUse();
+    const events = ['pointermove', 'pointerdown', 'keydown', 'wheel'] as const;
+    for (const name of events) window.addEventListener(name, onUse, { passive: true });
+    return () => {
+      for (const name of events) window.removeEventListener(name, onUse);
+      window.clearTimeout(idle);
+    };
+  }, [forMs, initially]);
+  return used;
+}
+
 /** True once the board has been out of reach for a while (short blips don't count). */
 export function useLongOffline(status: SyncStatus, afterMs = 10_000): boolean {
   const [long, setLong] = useState(false);
