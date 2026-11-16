@@ -134,6 +134,10 @@ export interface Note {
   parentId?: string;
   /** `YYYY-MM-DD` for an all-day deadline, or a full ISO date-time. */
   due?: string;
+  /** When it happens (for the calendar), like `due`: `YYYY-MM-DD` for all day, or an ISO date-time. */
+  start?: string;
+  /** When it ends: the last day (included) for all day, or a date-time after `start`. */
+  end?: string;
   /** ISO date-time when the wall should show a reminder. */
   remindAt?: string;
   /** The `remindAt` the server has already shown (or skipped). Moving the reminder arms it again. */

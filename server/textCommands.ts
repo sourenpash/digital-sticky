@@ -1,7 +1,8 @@
 import { differenceInCalendarDays, format, isSameDay, parseISO } from 'date-fns';
 import { deadlineDone, lanesInOrder } from '../shared/board.ts';
-import { timeLabel } from '../shared/dates.ts';
+import { dayKey, timeLabel } from '../shared/dates.ts';
 import { followUpDue } from '../shared/followups.ts';
+import { multiDay, noteSpan, spanDays, spanLabel, spanOnDay, spanOver } from '../shared/spans.ts';
 import { HELP_TEXT, type TextCommand } from '../shared/textCommands.ts';
 import type { Board, Note } from '../shared/types.ts';
 import { newId, type BoardStore } from './store.ts';
@@ -36,7 +37,7 @@ function findSticky(board: Board, words: string): Note | undefined {
   return open.find(note => note.title.trim().toLowerCase() === wanted) ?? open.find(note => note.title.toLowerCase().includes(wanted));
 }
 
-/** What's due today, one line each: overdue deadlines and today's, today's reminders, and follow-ups. */
+/** What's due today, one line each: overdue deadlines and today's, today's events and reminders, and follow-ups. */
 export function todayLines(board: Board, now: Date): string[] {
   const lines: Array<{ order: number; text: string }> = [];
   for (const note of board.notes) {
@@ -57,6 +58,12 @@ export function todayLines(board: Board, now: Date): string[] {
         lines.push({ order: 2, text: `• ${title} (due today${note.due.length > 10 ? `, ${timeLabel(due)}` : ''})` });
         continue;
       }
+    }
+    const span = noteSpan(note);
+    if (span && spanDays(span).includes(dayKey(now)) && !spanOver(span, now)) {
+      const when = multiDay(span) ? (spanOnDay(span, now) ?? spanLabel(span)) : span.start.allDay ? 'all day' : spanLabel(span);
+      lines.push({ order: 3, text: `• ${title} (${when})` });
+      continue;
     }
     if (note.remindAt) {
       const at = parseISO(note.remindAt);

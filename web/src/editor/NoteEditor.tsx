@@ -1,11 +1,12 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { addDays, format, isSameDay, parseISO, set } from 'date-fns';
+import { addDays, addMinutes, format, isSameDay, parseISO, set } from 'date-fns';
 import {
   AlignLeft,
   Award,
   Bell,
   BriefcaseBusiness,
   CalendarClock,
+  CalendarDays,
   Check,
   ChevronDown,
   ExternalLink,
@@ -30,6 +31,7 @@ import { composeWhen, parseWhen, splitWhen } from '../../../shared/dates.ts';
 import { awaitingReply } from '../../../shared/followups.ts';
 import { CHANNEL_INFO } from '../../../shared/messages.ts';
 import { describeRepeat, pruneCompletions, repeatStatus, weekDots } from '../../../shared/recurring.ts';
+import { composeEnd, endAfter, moveStart, noteSpan, spanLabel } from '../../../shared/spans.ts';
 import {
   APP_TYPES,
   NOTE_COLORS,
@@ -53,7 +55,7 @@ import { MessageField } from './MessageField.tsx';
 import { PartOf, RelatedField } from './RelatedField.tsx';
 import { templateFor } from './templates.ts';
 
-type Section = 'application' | 'message' | 'follow' | 'due' | 'repeat' | 'remind' | 'checklist' | 'links' | 'related' | 'body' | 'ai';
+type Section = 'application' | 'message' | 'follow' | 'due' | 'event' | 'repeat' | 'remind' | 'checklist' | 'links' | 'related' | 'body' | 'ai';
 
 /** Which fields each kind of column shows first. The rest sit behind "Add …". */
 const PRIMARY: Record<LaneKind, Section[]> = {
@@ -61,16 +63,16 @@ const PRIMARY: Record<LaneKind, Section[]> = {
   source: ['links', 'due', 'body', 'ai'],
   task: ['message', 'follow', 'due', 'checklist', 'related', 'body', 'ai'],
   routine: ['repeat', 'body', 'ai'],
-  reminder: ['remind', 'body'],
+  reminder: ['event', 'remind', 'body'],
   note: ['body'],
 };
-const ALL: Section[] = ['application', 'message', 'follow', 'due', 'repeat', 'remind', 'checklist', 'links', 'related', 'body', 'ai'];
+const ALL: Section[] = ['application', 'message', 'follow', 'due', 'event', 'repeat', 'remind', 'checklist', 'links', 'related', 'body', 'ai'];
 /** Recurring tasks have no deadline, only recurring tasks repeat, and only to-dos are messages. */
 const NOT_OFFERED: Record<LaneKind, Section[]> = {
   application: ['repeat', 'message'],
   source: ['repeat', 'message'],
   task: ['repeat'],
-  routine: ['application', 'due', 'remind', 'message'],
+  routine: ['application', 'due', 'event', 'remind', 'message'],
   reminder: ['repeat', 'message'],
   note: ['repeat', 'message'],
 };
@@ -79,6 +81,7 @@ const SECTION_LABEL: Record<Section, string> = {
   message: 'email or text',
   follow: 'follow-up',
   due: 'deadline',
+  event: 'date and time',
   repeat: 'repeat',
   remind: 'reminder',
   checklist: 'checklist',
@@ -102,6 +105,8 @@ function hasContent(note: Note, section: Section, notes: Note[]): boolean {
       return Boolean(note.ai || note.aiLog?.length);
     case 'due':
       return Boolean(note.due);
+    case 'event':
+      return Boolean(note.start);
     case 'repeat':
       return Boolean(note.repeat);
     case 'remind':
@@ -242,6 +247,8 @@ export function NoteEditor({
             quick={dueQuickPicks()}
           />
         );
+      case 'event':
+        return <EventField key={section} note={note} onChange={onChange} />;
       case 'repeat':
         return <RepeatField key={section} note={note} now={now} onChange={onChange} />;
       case 'remind':
@@ -575,7 +582,16 @@ function dueQuickPicks(): QuickPick[] {
 
 function remindQuickPicks(note: Note): QuickPick[] {
   const nine = (day: Date) => set(day, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }).toISOString();
-  const picks: QuickPick[] = [{ label: 'Tomorrow 9 AM', value: nine(addDays(currentTime(), 1)) }];
+  const picks: QuickPick[] = [];
+  const span = noteSpan(note);
+  if (span && !span.start.allDay) {
+    picks.push({ label: '15 min before', value: addMinutes(span.start.date, -15).toISOString() });
+    picks.push({ label: '1 hour before', value: addMinutes(span.start.date, -60).toISOString() });
+  } else if (span) {
+    picks.push({ label: 'Day before', value: nine(addDays(span.start.date, -1)) });
+    picks.push({ label: 'Morning of', value: nine(span.start.date) });
+  }
+  picks.push({ label: 'Tomorrow 9 AM', value: nine(addDays(currentTime(), 1)) });
   const due = parseWhen(note.due);
   if (due) {
     picks.push({ label: 'Day before deadline', value: nine(addDays(due.date, -1)) });
@@ -637,6 +653,85 @@ function WhenField({
         ))}
       </div>
       <p className="ne-hint">{hint}</p>
+    </fieldset>
+  );
+}
+
+const LENGTHS = [
+  { label: '30 min', minutes: 30 },
+  { label: '1 hour', minutes: 60 },
+  { label: '2 hours', minutes: 120 },
+];
+
+/** When it happens: a start, and an end if it has one. Without times it's all day (and can run several days). */
+function EventField({ note, onChange }: { note: Note; onChange: (patch: Partial<Note>) => void }) {
+  const id = `event-${note.id}`;
+  const start = splitWhen(note.start);
+  const end = splitWhen(note.end);
+  const span = noteSpan(note);
+  const timed = Boolean(start.time);
+  const setStart = (value: string | undefined) => onChange(moveStart(note, value));
+  const setEnd = (date: string, time: string) => onChange({ end: composeEnd(note.start, date, time) });
+  const endLeftOut = Boolean(note.end) && span !== null && span.end === null;
+  return (
+    <fieldset className="ne-section">
+      <legend className="ne-label">
+        <CalendarDays aria-hidden="true" /> Date and time
+      </legend>
+      <div className="ne-span-row">
+        <span className="ne-span-label">Starts</span>
+        <div className="ne-when">
+          <input id={`${id}-start-date`} type="date" aria-label="Start date" value={start.date} onChange={e => setStart(composeWhen(e.target.value, start.time))} />
+          <input
+            id={`${id}-start-time`}
+            type="time"
+            aria-label="Start time"
+            value={start.time}
+            disabled={!start.date}
+            onChange={e => setStart(composeWhen(start.date, e.target.value))}
+          />
+          {note.start && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange({ start: undefined, end: undefined })}>
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+      {note.start && (
+        <div className="ne-span-row">
+          <span className="ne-span-label">Ends</span>
+          <div className="ne-when">
+            <input id={`${id}-end-date`} type="date" aria-label="End date" min={start.date} value={end.date} onChange={e => setEnd(e.target.value, end.time)} />
+            <input
+              id={`${id}-end-time`}
+              type="time"
+              aria-label="End time"
+              value={end.time}
+              disabled={!timed}
+              onChange={e => setEnd(end.date, e.target.value)}
+            />
+            {note.end && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange({ end: undefined })}>
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      {timed && (
+        <div className="ne-quick">
+          {LENGTHS.map(length => (
+            <button key={length.label} type="button" className="chip-btn" onClick={() => onChange({ end: endAfter(note.start, length.minutes) })}>
+              {length.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {endLeftOut ? (
+        <p className="ne-hint is-warn">The end is before the start, so the calendar leaves it out.</p>
+      ) : (
+        <p className="ne-hint">{span ? spanLabel(span, { date: true }) : 'Leave the times empty for all day, and the end empty if it has none.'}</p>
+      )}
     </fieldset>
   );
 }

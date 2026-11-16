@@ -2,24 +2,30 @@ import { addDays, isSameDay, parseISO, startOfDay } from 'date-fns';
 import { dayKey, isPast, parseWhen, type When } from './dates.ts';
 import { followUpDue } from './followups.ts';
 import { isRested } from './recurring.ts';
+import { noteSpan, spanDays, spanOver, type Span } from './spans.ts';
 import { FINISHED_STAGES, type Lane, type Note, type NoteColor } from './types.ts';
 
 export interface NoteWhen {
   when: When;
-  /** `due` = deadline, `remind` = reminder time, `follow` = time to follow up. */
-  kind: 'due' | 'remind' | 'follow';
+  /** `due` = deadline, `event` = when it happens (start and end), `remind` = reminder time, `follow` = time to follow up. */
+  kind: 'due' | 'event' | 'remind' | 'follow';
+  /** For `event`: from when until when. */
+  span?: Span;
 }
 
 /**
  * The date that matters for a note: when to follow up, otherwise its deadline,
- * otherwise its reminder. Once an application is submitted (or a message sent) its
- * deadline stops counting, but a reminder (say, for the interview) still shows.
+ * otherwise when it happens, otherwise its reminder. Once an application is submitted
+ * (or a message sent) its deadline stops counting, but a reminder (say, for the
+ * interview) still shows.
  */
 export function noteWhen(note: Note): NoteWhen | null {
   const follow = parseWhen(note.followUp?.at);
   if (follow) return { when: follow, kind: 'follow' };
   const due = deadlineDone(note) ? null : parseWhen(note.due);
   if (due) return { when: due, kind: 'due' };
+  const span = noteSpan(note);
+  if (span) return { when: span.start, kind: 'event', span };
   const remind = parseWhen(note.remindAt);
   if (remind) return { when: remind, kind: 'remind' };
   return null;
@@ -152,10 +158,16 @@ export interface StripDay {
   items: StripItem[];
 }
 
+/** The days (`dayKey`) an item goes on in a calendar: every day of an event, otherwise its own. */
+export function itemDays(item: NoteWhen): string[] {
+  return item.span ? spanDays(item.span) : [dayKey(item.when.date)];
+}
+
 /**
  * The wall's calendar strip: today and the days after it, each with the deadlines,
- * follow-ups and reminders that fall on it. Overdue deadlines and follow-ups sit on
- * today so they can't be missed; reminders that already went off are left out.
+ * events, follow-ups and reminders that fall on it (an event on each of its days).
+ * Overdue deadlines and follow-ups sit on today so they can't be missed; reminders
+ * that already went off, and events that are over, are left out.
  */
 export function twoWeekDays(notes: Note[], now: Date, count = 14): StripDay[] {
   const start = startOfDay(now);
@@ -165,6 +177,11 @@ export function twoWeekDays(notes: Note[], now: Date, count = 14): StripDay[] {
   });
   const byKey = new Map(days.map(day => [day.key, day]));
   for (const item of datedNotes(notes)) {
+    if (item.span) {
+      if (spanOver(item.span, now)) continue;
+      for (const key of itemDays(item)) byKey.get(key)?.items.push({ ...item, overdue: false });
+      continue;
+    }
     const past = isPast(item.when, now);
     if (past && item.kind === 'remind') continue;
     const day = past ? days[0] : byKey.get(dayKey(item.when.date));

@@ -4,6 +4,7 @@ import { isFinishedStage, noteWhen } from '../../../shared/board.ts';
 import { countdownLabel, daysUntil, isPast, parseWhen, reminderLabel, timeLabel, urgencyOf, type When } from '../../../shared/dates.ts';
 import { CHANNEL_INFO } from '../../../shared/messages.ts';
 import { repeatStatus, type RepeatStatus } from '../../../shared/recurring.ts';
+import { multiDay, spanNow, spanOver, type Span } from '../../../shared/spans.ts';
 import type { FollowUp, Note } from '../../../shared/types.ts';
 
 export type ChipTone =
@@ -46,6 +47,7 @@ export function chipFor(note: Note, now: Date, opts: { compact?: boolean } = {})
     return { label: compact ? word : `${word} ${format(parseISO(note.sentAt), 'MMM d')}`, tone: 'good', icon: 'check' };
   }
   if (!w) return null;
+  if (w.span) return eventChip(w.span, now, compact);
   if (w.kind === 'remind') {
     return isPast(w.when, now)
       ? { label: 'Went off', tone: 'muted', icon: 'bell' }
@@ -61,6 +63,13 @@ function followChip(followUp: FollowUp, now: Date, compact: boolean): ChipInfo {
   const days = daysUntil(when, now);
   const day = days === 0 ? 'today' : days === 1 ? 'tomorrow' : days < 7 ? format(when.date, 'EEE') : format(when.date, 'MMM d');
   return { label: compact ? day.charAt(0).toUpperCase() + day.slice(1) : `Follow up ${day}`, tone: 'follow', icon: 'reply' };
+}
+
+/** "Now" while it's on, then when it starts: "Today 2:30 PM", "Tomorrow", "Nov 18 – 20"; "Over" after. */
+function eventChip(span: Span, now: Date, compact: boolean): ChipInfo {
+  if (spanOver(span, now)) return { label: 'Over', tone: 'muted' };
+  if (spanNow(span, now)) return { label: multiDay(span) && !compact ? `Now, until ${format(span.end!.date, 'MMM d')}` : 'Now', tone: 'today' };
+  return { label: compact ? shortReminder(span.start, now) : reminderLabel(span.start, now), tone: 'remind' };
 }
 
 /** "3 PM" (today), "Thu 10 AM", "Oct 12". */

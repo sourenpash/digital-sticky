@@ -1,22 +1,24 @@
 import { format } from 'date-fns';
-import { Bell, Reply } from 'lucide-react';
+import { Bell, CalendarDays, Reply } from 'lucide-react';
 import { datedNotes, noteColor, twoWeekDays, type StripItem } from '../../../shared/board.ts';
 import { daysUntil, isPast, timeLabel } from '../../../shared/dates.ts';
+import { spanOnDay } from '../../../shared/spans.ts';
 import type { Lane, Note } from '../../../shared/types.ts';
 
 /** Chips that fit in a day; more than this shows "+N more". */
 const PER_DAY = 3;
 
-function Item({ item, lanes }: { item: StripItem; lanes: Lane[] }) {
-  const { note, when, kind, overdue } = item;
+function Item({ item, lanes, day }: { item: StripItem; lanes: Lane[]; day: Date }) {
+  const { note, when, kind, overdue, span } = item;
   const follow = kind === 'follow';
-  const tone = kind === 'remind' ? 'remind' : overdue ? (follow ? 'follow-now' : 'overdue') : follow ? 'follow' : 'due';
+  const tone = kind === 'remind' ? 'remind' : kind === 'event' ? 'event' : overdue ? (follow ? 'follow-now' : 'overdue') : follow ? 'follow' : 'due';
   // Follow-ups go out in the morning; the time would only crowd the day.
-  const time = when.allDay || follow ? null : timeLabel(when.date);
+  const time = span ? spanOnDay(span, day) : when.allDay || follow ? null : timeLabel(when.date);
   return (
     <li className={`wall-wk-item paper-${noteColor(note, lanes.find(l => l.id === note.laneId))} is-${tone}`}>
       {kind === 'remind' && <Bell aria-label="Reminder" />}
       {follow && <Reply aria-label="Follow up" />}
+      {kind === 'event' && <CalendarDays aria-label="Event" />}
       <span className="wall-wk-title">{note.title || 'Untitled note'}</span>
       {overdue ? <span className="wall-wk-time">{follow ? 'now' : 'late'}</span> : time && <span className="wall-wk-time">{time}</span>}
     </li>
@@ -65,7 +67,7 @@ export function TwoWeeks({ notes, lanes, now }: { notes: Note[]; lanes: Lane[]; 
               </span>
               <ul className="wall-wk-items">
                 {shown.map(item => (
-                  <Item key={`${item.note.id}-${item.kind}`} item={item} lanes={lanes} />
+                  <Item key={`${item.note.id}-${item.kind}`} item={item} lanes={lanes} day={day.date} />
                 ))}
                 {more > 0 && <li className="wall-wk-more">+{more} more</li>}
               </ul>

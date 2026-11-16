@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { addMonths, format, parseISO, startOfMonth } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { datedNotes } from '../../../shared/board.ts';
+import { datedNotes, itemDays } from '../../../shared/board.ts';
 import { dayKey, daysUntil, isPast, monthGrid } from '../../../shared/dates.ts';
+import { spanOver } from '../../../shared/spans.ts';
 import type { Board } from '../../../shared/types.ts';
 import { AgendaList, type AgendaItem } from './Agenda.tsx';
 
@@ -13,14 +14,15 @@ export function CalendarTab({ board, now, desktop, onOpen }: { board: Board; now
   const [selected, setSelected] = useState(() => dayKey(now));
   const items = datedNotes(board.notes);
   const byDay = new Map<string, AgendaItem[]>();
+  // An event goes on every day it covers.
   for (const item of items) {
-    const key = dayKey(item.when.date);
-    byDay.set(key, [...(byDay.get(key) ?? []), item]);
+    for (const key of itemDays(item)) byDay.set(key, [...(byDay.get(key) ?? []), item]);
   }
   const colorOf = (item: AgendaItem) =>
     item.note.color ?? board.lanes.find(l => l.id === item.note.laneId)?.color ?? 'yellow';
   const overdue = items.filter(i => i.kind === 'due' && isPast(i.when, now));
-  const soon = items.filter(i => !isPast(i.when, now) && daysUntil(i.when, now) <= 14);
+  const over = (item: AgendaItem) => (item.span ? spanOver(item.span, now) : isPast(item.when, now));
+  const soon = items.filter(i => !over(i) && daysUntil(i.when, now) <= 14);
   const selectedItems = byDay.get(selected) ?? [];
 
   return (
@@ -72,7 +74,7 @@ export function CalendarTab({ board, now, desktop, onOpen }: { board: Board; now
                   type="button"
                   className={cls}
                   aria-pressed={selected === day.key}
-                  aria-label={`${format(day.date, 'EEEE, MMMM d')}${dayItems.length ? `, ${dayItems.length} due` : ''}`}
+                  aria-label={`${format(day.date, 'EEEE, MMMM d')}${dayItems.length ? `, ${dayItems.length} on the calendar` : ''}`}
                   onClick={() => setSelected(day.key)}
                 >
                   <span className="cal-num">{format(day.date, 'd')}</span>
@@ -101,9 +103,9 @@ export function CalendarTab({ board, now, desktop, onOpen }: { board: Board; now
       <section className="agenda" aria-label="Agenda">
         <h3 className="section-title">{format(parseISO(selected), 'EEEE, MMMM d')}</h3>
         {selectedItems.length > 0 ? (
-          <AgendaList items={selectedItems} lanes={board.lanes} now={now} onOpen={onOpen} />
+          <AgendaList items={selectedItems} lanes={board.lanes} now={now} day={parseISO(selected)} onOpen={onOpen} />
         ) : (
-          <p className="empty-line">Nothing due this day.</p>
+          <p className="empty-line">Nothing on this day.</p>
         )}
         {overdue.length > 0 && (
           <>

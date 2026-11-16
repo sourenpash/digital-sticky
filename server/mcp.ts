@@ -107,6 +107,8 @@ function describeSticky(board: Board, note: Note) {
     column: laneTitle(board, note.laneId),
     ...(note.body ? { notes: note.body } : {}),
     ...(note.due ? { deadline: note.due } : {}),
+    ...(note.start ? { starts: note.start } : {}),
+    ...(note.end ? { ends: note.end } : {}),
     ...(note.remindAt ? { reminder: note.remindAt } : {}),
     ...(note.stage ? { stage: note.stage } : {}),
     ...(note.funder ? { to: note.funder } : {}),

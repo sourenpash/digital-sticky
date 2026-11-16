@@ -1248,6 +1248,23 @@
   gap: 8px;
 }
 
+.ne-span-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.ne-span-label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ne-hint.is-warn {
+  color: var(--danger);
+}
+
 .ne-quick {
   display: flex;
   flex-wrap: wrap;

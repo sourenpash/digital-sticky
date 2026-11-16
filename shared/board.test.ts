@@ -61,6 +61,25 @@ describe('twoWeekDays', () => {
   });
 });
 
+describe('events', () => {
+  it('go on each of their days, show when it’s on rather than the reminder, and drop off once over', () => {
+    const conference = note('Conference', { start: '2026-09-29', end: '2026-10-02' });
+    const meeting = note('Meeting', {
+      start: new Date('2026-10-01T14:30:00').toISOString(),
+      end: new Date('2026-10-01T15:30:00').toISOString(),
+      remindAt: new Date('2026-10-01T14:15:00').toISOString(),
+    });
+    const over = note('Lunch', { start: new Date('2026-09-30T12:00:00').toISOString(), end: new Date('2026-09-30T13:00:00').toISOString() });
+    expect(noteWhen(meeting)?.kind).toBe('event');
+    const days = twoWeekDays([conference, meeting, over], now);
+    expect(titles(days[0])).toEqual(['Conference']);
+    expect(titles(days[1])).toEqual(['Conference', 'Meeting']);
+    expect(titles(days[2])).toEqual(['Conference']);
+    expect(titles(days[3])).toEqual([]);
+    expect(days[0]?.items[0]?.overdue).toBe(false);
+  });
+});
+
 describe('follow-ups and messages', () => {
   const nudge = { at: new Date('2026-10-14T09:00:00').toISOString(), everyDays: 14 };
 

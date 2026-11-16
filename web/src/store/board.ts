@@ -50,7 +50,7 @@ const TYPING_MS = 600;
 const TEXT_FIELDS = new Set(['title', 'body', 'funder', 'amount']);
 
 const NOTE_FIELDS = [
-  'laneId', 'title', 'body', 'color', 'parentId', 'due', 'remindAt', 'appType', 'stage', 'funder', 'amount',
+  'laneId', 'title', 'body', 'color', 'parentId', 'due', 'start', 'end', 'remindAt', 'appType', 'stage', 'funder', 'amount',
   'channel', 'sentAt', 'followUp', 'ai', 'checklist', 'links', 'repeat', 'completions', 'pinned', 'done', 'doneAt',
 ] as const;
 

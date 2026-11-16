@@ -10,6 +10,7 @@ A sticky-note wall for a bedroom monitor. It shows colored squares for applicati
 - **Reminders on your phone** (checkpoint 9). Reminders and follow-up nudges show up as notifications on your iPhone (from the board on your Home Screen), and can come as iMessages through a Mac. Text the board back: **done**, **snooze 1h**, **add call NSF friday**, **today**. See [Reminders on your phone](#reminders-on-your-phone-optional).
 - **Not tried for real yet.** No AI was asked to do anything, and no notification or text was sent: stand-ins played Claude, the push services and BlueBubbles in every test. The first real run is yours to start, from the Wall tab.
 - **Screen saver, so the TV doesn't burn in.** It shows the time for a few seconds, then goes black: all night while you sleep (1 AM to 9 AM), and for 5 minutes every hour during the day. Moving the mouse brings the board back. Change it under Wall → Screen saver.
+- **Start and end times, and dates.** A sticky can say when it happens: 2:30 to 3:30 PM, or Nov 18 to 20. The calendar and the wall show it on each of its days, and texting **today** lists it. Set it under **Date and time** in the sticky (Reminders show it first; other stickies have it under Add …).
 - **Click a sticky on the wall** with the wall computer's mouse to open it right there. **Back to the wall** returns, and so does leaving it alone for 2 minutes.
 - **An iPhone app** (in [`ios/`](ios/README.md), built with Xcode on a Mac). Scan the wall's code to set it up. It opens the board, and sets its reminders as notifications on the phone ahead of time, so they come even with no connection. Not tried on an iPhone yet: it was written on the wall computer, which can't build iPhone apps.
 
@@ -391,6 +392,7 @@ The API, for scripts (AIs use the MCP server instead):
 Besides the usual fields, a note can have:
 
 - `parentId`: the sticky it's a related task of;
+- `start` and `end`: when it happens, for the calendar. Like `due`, `YYYY-MM-DD` for all day (the end day included) or a date-time; the end is optional;
 - `channel` (`email`, `text` or `call`) and `sentAt`, for messages;
 - `followUp`: `{"at": time, "everyDays": 14}`;
 - `ai`: what the AI helper should do, how often, and what it may change; `requestedAt` asks for a run now, and `by` picks the AI that does it.
